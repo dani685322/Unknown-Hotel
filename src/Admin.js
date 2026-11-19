@@ -201,7 +201,7 @@ export class Admin {
   }
 
   _onGlobalKey(event) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.game.ownerSession?.role !== 'owner') return;
     const toggle = event.code === 'Backquote' || event.code === 'Slash' || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
     if (event.type === 'keydown' && toggle && !event.repeat) {
       event.preventDefault();

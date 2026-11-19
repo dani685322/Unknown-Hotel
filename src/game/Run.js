@@ -6,6 +6,7 @@ import { doorCreak, unlockAudio } from '../entities/sfx.js';
 import { MainMenu } from '../ui/MainMenu.js';
 import { OptionsMenu } from '../ui/OptionsMenu.js';
 import { MultiplayerMenu } from '../ui/MultiplayerMenu.js';
+import { PartyChat } from '../ui/PartyChat.js';
 import { Admin } from '../Admin.js';
 import { EntityManager } from '../entities/EntityManager.js';
 import { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
@@ -51,7 +52,13 @@ export class Run {
       renderer,
       onClose: () => this.menu.setMode('title'),
     });
-    this.multiplayer = new MultiplayerMenu({ onClose: () => this.menu.setMode('title') });
+    this.ownerSession = null;
+    this.partyChat = new PartyChat({ game: this });
+    this.multiplayer = new MultiplayerMenu({
+      onClose: () => this.menu.setMode('title'),
+      onSession: (session) => { this.ownerSession = session; },
+      onChat: (message) => this.partyChat.receive(message),
+    });
     this.state = 'title';
     this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
     this.message = '';
@@ -59,6 +66,11 @@ export class Run {
     this.target = null;
     this.entities = new EntityManager({ game: this, scene, player });
     this.admin = new Admin({ game: this, scene, player, entities: this.entities });
+
+    if (this.state === 'title') {
+      this.menu.setMode('hidden');
+      this.multiplayer.open();
+    }
 
     document.addEventListener('pointerlockchange', () => {
       if (this.state === 'playing') this.menu.setMode(this.input.locked ? 'hidden' : 'pause');
@@ -343,7 +355,7 @@ export class Run {
   }
 
   update(dt) {
-    if (this.state !== 'playing' || !this.input.locked) return;
+    if (this.state !== 'playing' || !this.input.locked || this.partyChat?.opened) return;
     dt *= this.timeScale;
     if (this.input.lampPressed) this.player.lampState = this.player.lampState === 'on' ? 'off' : 'on';
     if (dt === 0) return;

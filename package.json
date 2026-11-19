@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node --env-file-if-exists=.env.owner server/index.js",
+    "dev:all": "node --env-file-if-exists=.env.owner server/index.js & vite --host 0.0.0.0"
   },
   "dependencies": {
     "colyseus.js": "^0.15.0",
-    "three": "^0.160.0"
+    "three": "^0.160.0",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "vite": "^5.0.0"

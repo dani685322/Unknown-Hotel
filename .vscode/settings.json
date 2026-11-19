@@ -1,0 +1,12 @@
+{
+  "files.exclude": {
+    "**/.env.owner": true,
+    "**/data/*.sqlite": true,
+    "**/data/*.sqlite-*": true
+  },
+  "search.exclude": {
+    "**/.env.owner": true,
+    "**/data/*.sqlite": true,
+    "**/data/*.sqlite-*": true
+  }
+}
