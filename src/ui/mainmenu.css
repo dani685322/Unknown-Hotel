@@ -88,7 +88,10 @@ body { color: var(--paper); font-family: var(--mono); }
 .party-tools button { height: 38px; align-self: end; border: 1px solid var(--brass); background: rgba(198,155,90,.12); color: var(--paper); cursor: pointer; font: 10px var(--mono); }
 .public-parties { max-height: 120px; overflow-y: auto; margin: 8px 0; border-top: 1px solid var(--line); }
 .public-parties h3, .party-view h3 { margin: 10px 0 6px; font: italic 18px var(--display); }
-.public-parties button { display: flex; width: 100%; min-height: 42px; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--paper); cursor: pointer; }
+.public-party-row { display: grid; grid-template-columns: 1fr auto; min-height: 48px; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.public-party-row > div { display: grid; gap: 3px; }
+.public-party-row > div span { color: var(--muted); font-size: 9px; }
+.public-party-row button { min-width: 62px; min-height: 32px; border: 1px solid var(--brass); background: rgba(198,155,90,.12); color: var(--paper); cursor: pointer; }
 .party-view { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
 .party-view p { color: var(--muted); font-size: 10px; }
 .party-members { display: grid; gap: 5px; margin: 8px 0; }
@@ -109,6 +112,10 @@ body { color: var(--paper); font-family: var(--mono); }
 .party-start { min-height: 44px; width: 100%; margin: 8px 0; border: 1px solid var(--line); background: #11120f; color: var(--muted); font: 11px var(--mono); }
 .party-start.ready { border-color: #d9ad62; background: rgba(217,173,98,.16); color: #fff0cf; box-shadow: 0 0 18px rgba(217,173,98,.38); animation: party-ready 1.2s ease-in-out infinite alternate; cursor: pointer; }
 .party-start.waiting { border-style: dashed; }
+.party-difficulty { display: grid; gap: 5px; margin: 8px 0; color: var(--muted); font-size: 9px; }
+.party-difficulty select { height: 38px; border: 1px solid var(--line); background: #080908; color: var(--paper); font: 10px var(--mono); }
+.party-difficulty-readout { color: var(--muted); }
+.party-difficulty-readout b { color: var(--brass); }
 @keyframes party-ready { from { box-shadow: 0 0 8px rgba(217,173,98,.22); } to { box-shadow: 0 0 24px rgba(217,173,98,.58); } }
 .menu-note { max-width: 440px; margin: 16px 0 0; color: #86837e; font: italic 14px/1.5 var(--display); }
 .menu-note span, .menu-version span, .menu-edge span { color: var(--brass); }

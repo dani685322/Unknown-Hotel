@@ -9,7 +9,7 @@ import { MultiplayerMenu } from '../ui/MultiplayerMenu.js';
 import { PartyChat } from '../ui/PartyChat.js';
 import { Admin } from '../Admin.js';
 import { EntityManager } from '../entities/EntityManager.js';
-import { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
+import { DIFFICULTY, DIFFICULTY_TIERS, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
 
 export class Run {
   constructor({ scene, renderer, input, player, camera, hud, prompt, reticle }) {
@@ -90,6 +90,7 @@ export class Run {
 
   startPartyMatch(party) {
     if (this.partyStarted) return;
+    this.difficulty = party.difficulty ?? 'Normal';
     this.partyStarted = true;
     this.multiplayer.root.hidden = true;
     this.start();
@@ -172,7 +173,19 @@ export class Run {
     this.player.position.set(0, 0, this.room.length / 2 - 1.8);
     this.player.velocity.set(0, 0, 0);
     this.addRoomItems();
+    if (index > 0) this.rollPartySpawns(index);
     this.setMessage(`${this.room.desc.label}  /  ${this.room.desc.archetype.replaceAll('_', ' ')}`, 2800);
+  }
+
+  rollPartySpawns(roomIndex) {
+    if (!this.partyStarted) return;
+    const tier = DIFFICULTY_TIERS[this.difficulty ?? 'Normal'] ?? DIFFICULTY_TIERS.Normal;
+    const doorRamp = Math.min(DIFFICULTY.cap, 1 + Math.max(0, roomIndex - 1) * DIFFICULTY.perDoor);
+    const chance = tier.spawnMultiplier * doorRamp;
+    const rush = ENTITY_SPAWN.Rush;
+    const ambush = ENTITY_SPAWN.Ambush;
+    if (roomIndex >= rush.minDoor && Math.random() < rush.p * chance) this.entities.spawn('rush', roomIndex);
+    if (roomIndex >= ambush.minDoor && Math.random() < ambush.p * chance) this.entities.spawn('ambush', roomIndex);
   }
 
   addRoomItems() {

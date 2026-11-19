@@ -34,6 +34,14 @@ export const ENTITY_SPAWN = {
 
 // difficulty ramp applied after minDoor
 export const DIFFICULTY = {
-  perDoor: 0.015,  // +1.5%
+  perDoor: 0.015,
   cap: 1.6,
+};
+
+export const DIFFICULTY_TIERS = {
+  Easy: { spawnMultiplier: 0.55, label: 'Easy' },
+  Normal: { spawnMultiplier: 1.00, label: 'Normal' },
+  Hard: { spawnMultiplier: 1.45, label: 'Hard' },
+  Extreme: { spawnMultiplier: 2.00, label: 'Extreme' },
+  Hell: { spawnMultiplier: 3.00, label: 'Hell' },
 };

@@ -7,7 +7,7 @@ export class PartyChat {
     this.root.className = 'party-chat';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header><span>FREE PARTY CHAT</span><b>4 PLAYER MAX</b></header>
+      <header><span>FREE PARTY CHAT</span><b>[T] OPEN · 4 PLAYER MAX</b></header>
       <div class="party-chat__messages" role="log" aria-live="polite"></div>
       <form class="party-chat__form">
         <input maxlength="500" autocomplete="off" placeholder="Message party" aria-label="Party chat message">
@@ -26,11 +26,16 @@ export class PartyChat {
       if (event.code === 'Escape') this.close();
     });
     document.addEventListener('keydown', (event) => {
-      if (event.code === 'Enter' && !event.repeat && !this.opened && document.pointerLockElement) {
+      const shouldOpen = (event.code === 'KeyT' || event.code === 'Enter')
+        && !event.repeat
+        && !this.opened
+        && document.pointerLockElement;
+      if (shouldOpen && !this.game.admin?.opened) {
         event.preventDefault();
+        event.stopPropagation();
         this.open();
       }
-    });
+    }, true);
   }
 
   open() {

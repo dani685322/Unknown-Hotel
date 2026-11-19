@@ -134,6 +134,7 @@ export class MultiplayerMenu {
         <div class="party-tools">
           <label>Party name<input id="party-name" maxlength="30" value="${this.account}'s party"></label>
           <label>Visibility<select id="party-visibility"><option value="public">Public</option><option value="private">Private</option></select></label>
+          <label>Difficulty<select id="party-difficulty"><option value="Easy">Easy</option><option value="Normal" selected>Normal</option><option value="Hard">Hard</option><option value="Extreme">Extreme</option><option value="Hell">Hell</option></select></label>
           <button type="button" id="party-create">Create Party</button>
           <label>Join by code<input id="party-code" maxlength="6" placeholder="ABC123"></label>
           <button type="button" id="party-join">Join Party</button>
@@ -213,11 +214,12 @@ export class MultiplayerMenu {
   createParty() {
     const name = this.root.querySelector('#party-name')?.value;
     const visibility = this.root.querySelector('#party-visibility')?.value;
+    const difficulty = this.root.querySelector('#party-difficulty')?.value ?? 'Normal';
     if (!this.ws?.socket || this.ws.socket.readyState !== WebSocket.OPEN) {
       this.setLobbyStatus('Connect to the server first.', 'error');
       return;
     }
-    this.ws.createParty(name, visibility);
+    this.ws.createParty(name, visibility, difficulty);
   }
 
   joinParty() {
@@ -253,12 +255,15 @@ export class MultiplayerMenu {
       }).join('');
     const humanControls = `<div class="party-leader-block"><div class="party-member-row party-leader-row"><b>${this.party.leader} / Leader</b><span class="party-member-tag">${this.party.leader === this.account ? 'YOU' : 'LEADER'}</span></div><div class="party-members-under-leader">${followerControls}${botControls}</div></div>`;
     const addBot = isLeader ? '<button type="button" id="party-add-bot">+ Add Bot</button>' : '';
+    const difficultyControl = isLeader
+      ? `<label class="party-difficulty">Difficulty<select id="party-difficulty-live"><option ${this.party.difficulty === 'Easy' ? 'selected' : ''}>Easy</option><option ${this.party.difficulty === 'Normal' ? 'selected' : ''}>Normal</option><option ${this.party.difficulty === 'Hard' ? 'selected' : ''}>Hard</option><option ${this.party.difficulty === 'Extreme' ? 'selected' : ''}>Extreme</option><option ${this.party.difficulty === 'Hell' ? 'selected' : ''}>Hell</option></select></label>`
+      : `<p class="party-difficulty-readout">Difficulty <b>${this.party.difficulty ?? 'Normal'}</b></p>`;
     const memberCount = this.party.members.length + (this.party.bots ?? []).length;
     const canStart = memberCount >= 2;
     const startButton = isLeader
       ? `<button type="button" id="party-start" class="party-start ${canStart ? 'ready' : ''}" ${canStart ? '' : 'disabled'}>Start Hotel</button>`
       : `<button type="button" class="party-start waiting" disabled>Waiting for leader</button>`;
-    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p><div class="party-members">${humanControls}</div>${addBot}${startButton}<button type="button" id="party-leave">Leave Party</button>`;
+    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p>${difficultyControl}<div class="party-members">${humanControls}</div>${addBot}${startButton}<button type="button" id="party-leave">Leave Party</button>`;
     view.querySelector('#party-leave')?.addEventListener('click', () => this.ws?.leaveParty());
     view.querySelectorAll('[data-leader]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.makeLeader(button.dataset.leader));
@@ -270,6 +275,7 @@ export class MultiplayerMenu {
       button.addEventListener('click', () => this.ws?.banMember(button.dataset.ban));
     });
     view.querySelector('#party-add-bot')?.addEventListener('click', () => this.ws?.addBot());
+    view.querySelector('#party-difficulty-live')?.addEventListener('change', (event) => this.ws?.setDifficulty(event.target.value));
     view.querySelector('#party-start')?.addEventListener('click', () => this.ws?.startParty());
     view.querySelectorAll('[data-remove-bot]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.removeBot(button.dataset.removeBot));
@@ -280,7 +286,7 @@ export class MultiplayerMenu {
     const host = this.root.querySelector('#public-parties');
     if (!host) return;
     host.innerHTML = this.publicParties.length
-      ? `<h3>Public Parties</h3>${this.publicParties.map((party) => `<button type="button" data-public-code="${party.code}"><b>${party.name}</b><span>${party.members}/4 · ${party.code}</span></button>`).join('')}`
+      ? `<h3>Public Parties</h3>${this.publicParties.map((party) => `<div class="public-party-row"><div><b>${party.name}</b><span>${party.members}/4 · ${party.difficulty ?? 'Normal'} · ${party.code}</span></div><button type="button" data-public-code="${party.code}">Join</button></div>`).join('')}`
       : '<p>No public parties.</p>';
     host.querySelectorAll('[data-public-code]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.joinParty(button.dataset.publicCode));

@@ -57,8 +57,8 @@ export class WebSocketClient {
     }
   }
 
-  createParty(name, visibility) {
-    this.send({ type: 'create_party', name, visibility });
+  createParty(name, visibility, difficulty) {
+    this.send({ type: 'create_party', name, visibility, difficulty });
   }
 
   joinParty(code) {
@@ -87,6 +87,10 @@ export class WebSocketClient {
 
   removeBot(username) {
     this.send({ type: 'remove_bot', username });
+  }
+
+  setDifficulty(difficulty) {
+    this.send({ type: 'set_difficulty', difficulty });
   }
 
   listPublicParties() {

@@ -95,6 +95,7 @@ function publicPartyList() {
     name: party.name,
     leader: party.leader,
     members: partySockets(party.code).length + party.bots.length,
+    difficulty: party.difficulty ?? 'Normal',
   }));
 }
 
@@ -109,6 +110,7 @@ function broadcastParty(code) {
     leader: party.leader,
     members: partySockets(code).map((socket) => socket.user),
     bots: party.bots,
+    difficulty: party.difficulty ?? 'Normal',
     started: party.started,
   });
 }
@@ -236,7 +238,9 @@ websocketServer.on('connection', (socket) => {
       const code = makePartyCode();
       const name = typeof message.name === 'string' ? message.name.trim().slice(0, 30) : `${socket.user}'s party`;
       const visibility = message.visibility === 'private' ? 'private' : 'public';
-      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user, bots: [], banned: new Set(), started: false });
+      const validDifficulties = new Set(['Easy', 'Normal', 'Hard', 'Extreme', 'Hell']);
+      const difficulty = validDifficulties.has(message.difficulty) ? message.difficulty : 'Normal';
+      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user, difficulty, bots: [], banned: new Set(), started: false });
       socket.partyCode = code;
       broadcastParty(code);
       broadcastPublicParties();
@@ -351,6 +355,17 @@ websocketServer.on('connection', (socket) => {
         moving: Boolean(message.moving),
         crouching: Boolean(message.crouching),
       });
+      return;
+    }
+
+    if (message.type === 'set_difficulty') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party || party.leader !== socket.user) return;
+      if (!['Easy', 'Normal', 'Hard', 'Extreme', 'Hell'].includes(message.difficulty)) return;
+      party.difficulty = message.difficulty;
+      broadcastParty(party.code);
+      broadcastPublicParties();
       return;
     }
 
