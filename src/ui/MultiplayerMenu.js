@@ -110,7 +110,10 @@ export class MultiplayerMenu {
       }
       this.account = result.username;
       this.session = { token: result.token, role: result.role };
-      localStorage.setItem(SERVER_KEY, server.replace(/^http/, 'ws'));
+      const socketUrl = server === location.origin
+        ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`
+        : `${server.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')}/ws`;
+      localStorage.setItem(SERVER_KEY, socketUrl);
       this.onSession?.(this.session);
       this.renderLobby(`${mode === 'register' ? 'Account created' : 'Signed in'} as ${result.username}.`);
     } catch (error) {
@@ -153,25 +156,12 @@ export class MultiplayerMenu {
 
   getServerUrl() {
     const saved = localStorage.getItem(SERVER_KEY);
-    if (saved) return saved;
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8080`;
-    }
-    if (location.hostname.includes('-5173.') && location.hostname.endsWith('.app.github.dev')) {
-      const host = location.hostname.replace('-5173.', '-8080.');
-      return `wss://${host}`;
-    }
-    if (location.protocol === 'https:' && location.hostname) {
-      return `wss://${location.hostname}:8080`;
-    }
-    return `ws://${location.hostname}:8080`;
+    if (saved && !saved.includes('-8080.app.github.dev') && !saved.includes(':8080')) return saved;
+    return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
   }
 
   getApiUrl() {
-    const server = this.getServerUrl();
-    if (server) return server.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'http://127.0.0.1:8080';
-    return `${location.protocol}//${location.hostname}:8080`;
+    return location.origin;
   }
 
   connectLobby() {
@@ -199,6 +189,10 @@ export class MultiplayerMenu {
       onPublicParties: (parties) => {
         this.publicParties = parties;
         this.updatePublicParties();
+      },
+      onModeration: () => {
+        this.party = null;
+        this.updatePartyView();
       },
       onPlayers: (players) => {
         this.players = players;
@@ -240,15 +234,29 @@ export class MultiplayerMenu {
       return;
     }
     const isLeader = this.party.leader === this.account;
-    const memberControls = this.party.members.map((member) =>
-      isLeader && member !== this.account
-        ? `<button type="button" data-leader="${member}">${member} / Make leader</button>`
-        : `<span>${member}${member === this.party.leader ? ' / Leader' : ''}</span>`
+    const humanControls = this.party.members.map((member) => {
+      const leaderLabel = member === this.party.leader ? ' / Leader' : '';
+      if (!isLeader || member === this.account) return `<span>${member}${leaderLabel}</span>`;
+      return `<div class="party-member-row"><b>${member}${leaderLabel}</b><div><button type="button" data-leader="${member}">Lead</button><button type="button" data-kick="${member}">Kick</button><button type="button" data-ban="${member}">Ban</button></div></div>`;
+    }).join('');
+    const botControls = (this.party.bots ?? []).map((bot) =>
+      isLeader ? `<div class="party-member-row bot-member"><b>${bot}</b><button type="button" data-remove-bot="${bot}">Remove</button></div>` : `<span class="bot-member">${bot} / Bot</span>`
     ).join('');
-    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p><div class="party-members">${memberControls}</div><button type="button" id="party-leave">Leave Party</button>`;
+    const addBot = isLeader ? '<button type="button" id="party-add-bot">Add Bot</button>' : '';
+    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p><div class="party-members">${humanControls}${botControls}</div>${addBot}<button type="button" id="party-leave">Leave Party</button>`;
     view.querySelector('#party-leave')?.addEventListener('click', () => this.ws?.leaveParty());
     view.querySelectorAll('[data-leader]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.makeLeader(button.dataset.leader));
+    });
+    view.querySelectorAll('[data-kick]').forEach((button) => {
+      button.addEventListener('click', () => this.ws?.kickMember(button.dataset.kick));
+    });
+    view.querySelectorAll('[data-ban]').forEach((button) => {
+      button.addEventListener('click', () => this.ws?.banMember(button.dataset.ban));
+    });
+    view.querySelector('#party-add-bot')?.addEventListener('click', () => this.ws?.addBot());
+    view.querySelectorAll('[data-remove-bot]').forEach((button) => {
+      button.addEventListener('click', () => this.ws?.removeBot(button.dataset.removeBot));
     });
   }
 

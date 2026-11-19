@@ -41,6 +41,14 @@ if (!owner) {
 const sessions = new Map();
 const sockets = new Set();
 const parties = new Map();
+const slurPattern = /\b(faggot|nigger|kike|chink|spic|tranny|whore)\b/gi;
+
+function filterChat(text) {
+  return text
+    .replace(slurPattern, (word) => '*'.repeat(word.length))
+    .replace(/https?:\/\/\S+/gi, '[link removed]')
+    .slice(0, 500);
+}
 
 function makePartyCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -59,6 +67,21 @@ function partySockets(code) {
   return [...sockets].filter((socket) => socket.user && socket.partyCode === code);
 }
 
+function broadcastPlayers() {
+  const players = [...sockets].filter((socket) => socket.user).map((socket) => socket.user);
+  const payload = JSON.stringify({ type: 'players', players });
+  for (const socket of sockets) {
+    if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+  }
+}
+
+function broadcastPublicParties() {
+  const payload = JSON.stringify({ type: 'public_parties', parties: publicPartyList() });
+  for (const socket of sockets) {
+    if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+  }
+}
+
 function sendParty(code, message) {
   const payload = JSON.stringify(message);
   for (const socket of partySockets(code)) {
@@ -71,7 +94,7 @@ function publicPartyList() {
     code: party.code,
     name: party.name,
     leader: party.leader,
-    members: partySockets(party.code).length,
+    members: partySockets(party.code).length + party.bots.length,
   }));
 }
 
@@ -85,6 +108,7 @@ function broadcastParty(code) {
     visibility: party.visibility,
     leader: party.leader,
     members: partySockets(code).map((socket) => socket.user),
+    bots: party.bots,
   });
 }
 
@@ -199,6 +223,7 @@ websocketServer.on('connection', (socket) => {
       socket.user = session.username;
       socket.send(JSON.stringify({ type: 'joined', username: socket.user, role: session.role }));
       socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
+      broadcastPlayers();
     }
 
     if (message.type === 'create_party') {
@@ -210,10 +235,10 @@ websocketServer.on('connection', (socket) => {
       const code = makePartyCode();
       const name = typeof message.name === 'string' ? message.name.trim().slice(0, 30) : `${socket.user}'s party`;
       const visibility = message.visibility === 'private' ? 'private' : 'public';
-      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user });
+      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user, bots: [], banned: new Set() });
       socket.partyCode = code;
       broadcastParty(code);
-      socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
+      broadcastPublicParties();
     }
 
     if (message.type === 'join_party') {
@@ -224,14 +249,18 @@ websocketServer.on('connection', (socket) => {
         socket.send(JSON.stringify({ type: 'error', message: 'Party code not found.' }));
         return;
       }
+      if (party.banned.has(socket.user.toLowerCase())) {
+        socket.send(JSON.stringify({ type: 'party_banned', message: 'You are banned from this party.' }));
+        return;
+      }
       const members = partySockets(code);
-      if (members.length >= 4) {
+      if (members.length + party.bots.length >= 4) {
         socket.send(JSON.stringify({ type: 'party_full', message: 'This party is full. Maximum 4 players.' }));
         return;
       }
       socket.partyCode = code;
       broadcastParty(code);
-      socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
+      broadcastPublicParties();
     }
 
     if (message.type === 'leave_party') {
@@ -245,7 +274,47 @@ websocketServer.on('connection', (socket) => {
       socket.partyCode = null;
       if (partySockets(code).length === 0) parties.delete(code);
       else broadcastParty(code);
-      socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
+      broadcastPublicParties();
+    }
+
+    if (message.type === 'add_bot') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party || party.leader !== socket.user) return socket.send(JSON.stringify({ type: 'error', message: 'Only the party leader can add bots.' }));
+      if (partySockets(party.code).length + party.bots.length >= 4) return socket.send(JSON.stringify({ type: 'party_full', message: 'This party is full. Maximum 4 players.' }));
+      const number = party.bots.length + 1;
+      party.bots.push(`Bot ${number}`);
+      broadcastParty(party.code);
+      broadcastPublicParties();
+      return;
+    }
+
+    if (message.type === 'remove_bot') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party || party.leader !== socket.user) return socket.send(JSON.stringify({ type: 'error', message: 'Only the party leader can remove bots.' }));
+      party.bots = party.bots.filter((bot) => bot !== String(message.username ?? ''));
+      broadcastParty(party.code);
+      broadcastPublicParties();
+      return;
+    }
+
+    if (message.type === 'kick_member' || message.type === 'ban_member') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party || party.leader !== socket.user) return socket.send(JSON.stringify({ type: 'error', message: 'Only the party leader can moderate members.' }));
+      const username = String(message.username ?? '').trim();
+      if (!username || username === socket.user) return;
+      if (message.type === 'ban_member') party.banned.add(username.toLowerCase());
+      const target = partySockets(party.code).find((member) => member.user === username);
+      if (target) {
+        target.partyCode = null;
+        target.send(JSON.stringify({ type: message.type === 'ban_member' ? 'party_banned' : 'party_kicked', message: message.type === 'ban_member' ? 'You were banned from this party.' : 'You were kicked from this party.' }));
+      }
+      if (party.leader === username) party.leader = socket.user;
+      broadcastParty(party.code);
+      broadcastPublicParties();
+      return;
     }
 
     if (message.type === 'make_leader') {
@@ -267,7 +336,8 @@ websocketServer.on('connection', (socket) => {
 
     if (message.type === 'chat') {
       if (!socket.user) return;
-      const text = typeof message.text === 'string' ? message.text.trim().slice(0, 500) : '';
+      const rawText = typeof message.text === 'string' ? message.text.trim() : '';
+      const text = filterChat(rawText);
       if (!text) return;
       broadcastChat(socket, {
         type: 'chat',
@@ -293,8 +363,10 @@ websocketServer.on('connection', (socket) => {
       socket.partyCode = null;
       if (partySockets(code).length === 0) parties.delete(code);
       else broadcastParty(code);
+      broadcastPublicParties();
     }
     sockets.delete(socket);
+    broadcastPlayers();
   });
 });
 

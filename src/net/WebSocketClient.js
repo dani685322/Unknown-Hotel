@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage }) {
+  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -10,6 +10,7 @@ export class WebSocketClient {
     this.onParty = onParty;
     this.onPublicParties = onPublicParties;
     this.onMessage = onMessage;
+    this.onModeration = onModeration;
     this.socket = null;
   }
 
@@ -31,6 +32,14 @@ export class WebSocketClient {
       if (message.type === 'party') this.onParty?.(message);
       if (message.type === 'public_parties') this.onPublicParties?.(message.parties ?? []);
       if (message.type === 'party_full') this.onError?.(message.message ?? 'The party is full.');
+      if (message.type === 'party_kicked') {
+        this.onModeration?.(message.message ?? 'You were kicked from the party.');
+        this.onError?.(message.message ?? 'You were kicked from the party.');
+      }
+      if (message.type === 'party_banned') {
+        this.onModeration?.(message.message ?? 'You were banned from the party.');
+        this.onError?.(message.message ?? 'You were banned from the party.');
+      }
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
     });
@@ -58,6 +67,22 @@ export class WebSocketClient {
 
   makeLeader(username) {
     this.send({ type: 'make_leader', username });
+  }
+
+  kickMember(username) {
+    this.send({ type: 'kick_member', username });
+  }
+
+  banMember(username) {
+    this.send({ type: 'ban_member', username });
+  }
+
+  addBot() {
+    this.send({ type: 'add_bot' });
+  }
+
+  removeBot(username) {
+    this.send({ type: 'remove_bot', username });
   }
 
   listPublicParties() {

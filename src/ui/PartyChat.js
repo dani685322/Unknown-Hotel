@@ -58,6 +58,11 @@ export class PartyChat {
   }
 
   receive(message) {
+    const safeText = String(message.text ?? '')
+      .replace(/\b(faggot|nigger|kike|chink|spic|tranny|whore)\b/gi, (word) => '*'.repeat(word.length))
+      .replace(/https?:\/\/\S+/gi, '[link removed]')
+      .slice(0, 500);
+    message = { ...message, text: safeText };
     this.messages.push(message);
     this.messages = this.messages.slice(-100);
     const line = document.createElement('div');
