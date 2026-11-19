@@ -1,0 +1,42 @@
+.opts {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  overflow: auto;
+  background: rgba(10, 7, 5, 0.96);
+  color: #e9dfc7;
+  font-family: var(--display, Georgia), Georgia, serif;
+  font-style: italic;
+}
+.opts[hidden] { display: none; }
+.opts.open { display: grid; }
+.opts__panel { width: min(840px, 100%); }
+.opts__header, .opts__footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.opts__header { padding-bottom: 14px; border-bottom: 1px solid rgba(233, 223, 199, 0.22); }
+.opts__eyebrow { color: rgba(233, 223, 199, 0.5); font-size: 12px; letter-spacing: 0.08em; }
+.opts__close { border: 0; background: transparent; color: #e9dfc7; cursor: pointer; font: 28px Georgia, serif; }
+.opts__panel h1 { margin: 20px 0 30px; font-size: 42px; font-weight: 400; }
+.opts__cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.col h2 { margin: 0 0 9px; color: rgba(233, 223, 199, 0.62); font-size: 15px; font-weight: 400; }
+.panel { min-height: 170px; padding: 20px; border: 1px solid rgba(233, 223, 199, 0.18); background: rgba(36, 25, 18, 0.5); }
+.panel__label { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; font-size: 17px; }
+.opts__value { color: #c99d64; font-variant-numeric: tabular-nums; }
+.opts__range { width: 100%; margin: 20px 0; accent-color: #b67a46; cursor: pointer; }
+.seg { display: flex; gap: 7px; }
+.seg button { flex: 1; min-height: 34px; border: 1px solid rgba(233, 223, 199, 0.2); background: transparent; color: rgba(233, 223, 199, 0.68); cursor: pointer; font: italic 14px Georgia, serif; }
+.seg button.is-active, .seg button:hover { border-color: #b67a46; color: #e9dfc7; }
+.chk { display: flex; align-items: center; gap: 10px; margin-top: 12px; cursor: pointer; font-size: 15px; }
+.chk input { width: 17px; height: 17px; margin: 0; accent-color: #b67a46; }
+.chk__box { display: none; }
+.opts__footer { margin-top: 24px; color: rgba(233, 223, 199, 0.5); font-size: 13px; }
+.opts__back { min-width: 130px; min-height: 42px; border: 1px solid #b67a46; background: transparent; color: #e9dfc7; cursor: pointer; font: italic 16px Georgia, serif; }
+.opts__back:hover { background: #b67a46; color: #100b07; }
+@media (max-width: 620px) {
+  .opts { padding: 18px; }
+  .opts__cols { grid-template-columns: 1fr; gap: 12px; }
+  .opts__panel h1 { margin: 14px 0 18px; font-size: 34px; }
+  .panel { min-height: 0; padding: 15px; }
+}

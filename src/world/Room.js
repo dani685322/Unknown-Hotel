@@ -1,28 +1,20 @@
 // src/world/Room.js — Phase 5: geometry builder for one generated room descriptor
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './roomGen.js';
+import { createRoomMaterials } from './surfaceMaterials.js';
 
 // Door opening, shared with Door.js later
 export const DOOR = { width: 1.15, height: 2.25, thickness: 0.18 };
-
-const MAT = {
-  floor:   new THREE.MeshStandardMaterial({ color: 0x2f2b27, roughness: 0.95 }),
-  wall:    new THREE.MeshStandardMaterial({ color: 0x6f6a5e, roughness: 0.90 }),
-  trim:    new THREE.MeshStandardMaterial({ color: 0x3a332b, roughness: 0.80 }),
-  ceil:    new THREE.MeshStandardMaterial({ color: 0x1b1917, roughness: 1.00 }),
-  wood:    new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.85 }),
-  cloth:   new THREE.MeshStandardMaterial({ color: 0x2b3240, roughness: 1.00 }),
-  metal:   new THREE.MeshStandardMaterial({ color: 0x8a8f99, metalness: 0.7, roughness: 0.4 }),
-  foliage: new THREE.MeshStandardMaterial({ color: 0x2c5a35, roughness: 0.90 }),
-  bulb:    new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffe6b0, emissiveIntensity: 2 }),
-};
 
 // local space: x in [-w/2, w/2], z in [-L/2, L/2]
 // entry (back wall) at +z, exit doorway at -z  ->  player walks toward -z
 export class Room {
   constructor(desc) {
     this.desc = desc;
-    this.rand = mulberry32(desc.seedOffset);
+    this.rand = mulberry32(desc.index * 7919 + 1);
+    this.materials = createRoomMaterials(desc);
+    this.ownedMaterials = new Set();
 
     this.group = new THREE.Group();
     this.group.name = desc.label;
@@ -76,8 +68,9 @@ export class Room {
     light.position.set(x, this.height - 0.25, z);
     this.group.add(light);
 
-    const bulb = this._box(0.16, 0.06, 0.16, MAT.bulb);
+    const bulb = this._box(0.16, 0.06, 0.16, this.materials.bulb);
     bulb.position.set(x, this.height - 0.12, z);
+    bulb.userData.noMerge = true;
     this.group.add(bulb);
 
     this.lights.push({ light, bulb, base, flicker, seed: this.rand() * 100 });
@@ -85,6 +78,7 @@ export class Room {
 
   // wall spanning x, containing the exit doorway (local -z end)
   _doorWall(z, facing) {
+    const MAT = this.materials;
     const w = this.width, h = this.height;
     const side = (w - DOOR.width) / 2;
 
@@ -110,6 +104,7 @@ export class Room {
   }
 
   _closet(x, z, facing) {
+    const MAT = this.materials;
     const w = 1.1, h = 2.05, d = 0.6;
     const body = this._box(w, h, d, MAT.wood);
     body.position.set(x, h / 2, z);
@@ -127,6 +122,7 @@ export class Room {
   _build() {
     const { width: w, length: L, height: h, archetype } = this.desc;
     const rand = this.rand;
+    const MAT = this.materials;
 
     // floor
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, L), MAT.floor);
@@ -135,12 +131,12 @@ export class Room {
 
     // ceiling (garden: raised, with an open skylight strip)
     if (archetype === 'garden') {
-      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, L), MAT.ceil);
+      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, L), MAT.ceiling);
       ceil.rotation.x = Math.PI / 2;
       ceil.position.y = h;
       this.group.add(ceil);
     } else {
-      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, L), MAT.ceil);
+      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, L), MAT.ceiling);
       ceil.rotation.x = Math.PI / 2;
       ceil.position.y = h;
       this.group.add(ceil);
@@ -169,15 +165,38 @@ export class Room {
       const sk = this._box(0.06, 0.12, L, MAT.trim);
       sk.position.set(s * (w / 2 - 0.1), 0.06, 0);
       this.group.add(sk);
+
+      const cornice = this._box(0.14, 0.12, L, MAT.trim);
+      cornice.position.set(s * (w / 2 - 0.12), h - 0.12, 0);
+      this.group.add(cornice);
+    }
+
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, L - 1, 8), MAT.metal);
+    pipe.rotation.x = Math.PI / 2;
+    pipe.position.set(w / 2 - 0.24, h - 0.42, 0);
+    this.group.add(pipe);
+
+    if (w > 4.5) {
+      const radiatorGeometry = new THREE.BoxGeometry(0.07, 0.72, 0.08);
+      const radiator = new THREE.InstancedMesh(radiatorGeometry, MAT.metal, 6);
+      const transform = new THREE.Object3D();
+      for (let i = 0; i < 6; i++) {
+        transform.position.set(-0.3 + i * 0.12, 0.42, 0);
+        transform.updateMatrix();
+        radiator.setMatrixAt(i, transform.matrix);
+      }
+      radiator.position.set(-w / 2 + 0.16, 0, L / 2 - 3);
+      this.group.add(radiator);
+      const radiatorTop = this._box(0.1, 0.08, 0.86, MAT.metal);
+      radiatorTop.position.set(-w / 2 + 0.16, 0.8, L / 2 - 3);
+      this.group.add(radiatorTop);
+      const radiatorBottom = this._box(0.1, 0.08, 0.86, MAT.metal);
+      radiatorBottom.position.set(-w / 2 + 0.16, 0.08, L / 2 - 3);
+      this.group.add(radiatorBottom);
     }
 
     /* ---------------------------------------------------------- lighting */
-    const lampCount = Math.max(1, Math.round(L / 11));
-    for (let i = 0; i < lampCount; i++) {
-      if (!this.desc.lit && rand() > 0.15) continue; // dark room: mostly dead
-      const z = -L / 2 + ((i + 0.5) / lampCount) * L;
-      this._lamp(0, z, archetype === 'garden' ? 40 : 22, rand() > 0.25);
-    }
+    this._lamp(0, 0, archetype === 'garden' ? 15 : this.desc.lit ? 7 : 1.8, true);
 
     /* ------------------------------------------------------------ hiding */
     const spotCount = this.desc.hidingSpots;
@@ -187,12 +206,15 @@ export class Room {
       this._closet(s * (w / 2 - 0.32), z, -s);
     }
 
-    /* ------------------------------------------------------------- props */
+    /* ------------------------------------------------------------ props */
     this._props(archetype, rand);
+    this._decayDetails(rand);
+    this._mergeStaticMeshes();
   }
 
   _props(archetype, rand) {
     const { width: w, length: L } = this.desc;
+    const MAT = this.materials;
     const innerX = w / 2 - 0.9;
 
     const scatter = (n, fn) => {
@@ -270,6 +292,107 @@ export class Room {
     }
   }
 
+  _decayDetails(rand) {
+    const { width: w, length: L } = this.desc;
+    if (w < 4.5 || L < 14) return;
+    const x = (rand() > 0.5 ? 1 : -1) * (w * 0.18 + rand() * 0.35);
+    const z = (rand() * 0.6 - 0.2) * L;
+    const chair = new THREE.Group();
+    const seat = this._box(0.58, 0.12, 0.58, this.materials.wood);
+    seat.position.set(0, 0.44, 0);
+    chair.add(seat);
+    const back = this._box(0.58, 0.62, 0.1, this.materials.wood);
+    back.position.set(0, 0.77, -0.23);
+    chair.add(back);
+    for (const lx of [-0.23, 0.23]) {
+      for (const lz of [-0.22, 0.22]) {
+        const leg = this._box(0.08, 0.42, 0.08, this.materials.wood);
+        leg.position.set(lx, 0.21, lz);
+        chair.add(leg);
+      }
+    }
+    chair.position.set(x, 0, z);
+    chair.rotation.set(0.03, rand() * Math.PI, rand() > 0.5 ? 0.48 : -0.48);
+    this.group.add(chair);
+
+    const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.58), this.materials.cloth);
+    paper.position.set(-x * 0.6, 0.012, z + 0.7);
+    paper.rotation.x = -Math.PI / 2;
+    paper.rotation.z = rand() * Math.PI;
+    this.group.add(paper);
+
+    const mirrorFrame = this._box(0.1, 1.15, 0.82, this.materials.trim);
+    mirrorFrame.position.set(-w / 2 + 0.12, 1.62, -L / 2 + 4);
+    this.group.add(mirrorFrame);
+    this.materials.mirror = new THREE.MeshStandardMaterial({ color: 0x59636a, metalness: 0.72, roughness: 0.26 });
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.98), this.materials.mirror);
+    mirror.position.set(-w / 2 + 0.065, 1.62, -L / 2 + 4);
+    mirror.rotation.y = Math.PI / 2;
+    this.group.add(mirror);
+
+    this.materials.crack = new THREE.MeshBasicMaterial({ color: 0x17110d });
+    for (const [offset, angle, scale] of [[-0.16, 0.4, 0.48], [0.02, -0.5, 0.36], [0.18, 0.58, 0.42]]) {
+      const crack = this._box(0.014, scale, 0.012, this.materials.crack);
+      crack.position.set(-w / 2 + 0.082, 1.62, -L / 2 + 4 + offset);
+      crack.rotation.x = angle;
+      this.group.add(crack);
+    }
+
+    if (this.desc.archetype === 'suite' || this.desc.archetype === 'garden') {
+      const side = rand() > 0.5 ? 1 : -1;
+      const windowZ = -L * 0.18;
+      this.materials.window = new THREE.MeshStandardMaterial({
+        color: 0x29343a,
+        emissive: 0x111a20,
+        emissiveIntensity: 0.4,
+        metalness: 0.12,
+        roughness: 0.38,
+      });
+      const recess = this._box(0.08, 1.34, 1.72, this.materials.trim);
+      recess.position.set(side * (w / 2 - 0.1), 1.95, windowZ);
+      this.group.add(recess);
+      const glass = this._box(0.035, 1.08, 1.42, this.materials.window);
+      glass.position.set(side * (w / 2 - 0.15), 1.95, windowZ);
+      this.group.add(glass);
+      for (const zOffset of [-0.76, 0.76]) {
+        const jamb = this._box(0.1, 1.42, 0.12, this.materials.wood);
+        jamb.position.set(side * (w / 2 - 0.18), 1.95, windowZ + zOffset);
+        this.group.add(jamb);
+      }
+      const sill = this._box(0.24, 0.1, 1.72, this.materials.wood);
+      sill.position.set(side * (w / 2 - 0.2), 1.27, windowZ);
+      this.group.add(sill);
+    }
+  }
+
+  _mergeStaticMeshes() {
+    const meshesByMaterial = new Map();
+    for (const child of [...this.group.children]) {
+      if (!child.isMesh || child.isInstancedMesh || child.userData.noMerge || Array.isArray(child.material)) continue;
+      const key = child.material.uuid;
+      if (!meshesByMaterial.has(key)) meshesByMaterial.set(key, { material: child.material, meshes: [] });
+      child.updateMatrix();
+      const geometry = child.geometry.clone().applyMatrix4(child.matrix);
+      meshesByMaterial.get(key).meshes.push({ mesh: child, geometry });
+    }
+
+    for (const { material, meshes } of meshesByMaterial.values()) {
+      const mergedGeometry = mergeGeometries(meshes.map(({ geometry }) => geometry), false);
+      if (!mergedGeometry) {
+        for (const { geometry } of meshes) geometry.dispose();
+        continue;
+      }
+      for (const { mesh, geometry } of meshes) {
+        this.group.remove(mesh);
+        mesh.geometry.dispose();
+        geometry.dispose();
+      }
+      const merged = new THREE.Mesh(mergedGeometry, material);
+      merged.userData.noMerge = true;
+      this.group.add(merged);
+    }
+  }
+
   /* ------------------------------------------------------------ runtime */
   update(t) {
     for (const l of this.lights) {
@@ -288,6 +411,14 @@ export class Room {
       if (o.geometry) o.geometry.dispose();
     });
     this.group.clear();
+    const ownedMaterials = new Set([...Object.values(this.materials), ...this.ownedMaterials]);
+    for (const material of ownedMaterials) {
+      material.map?.dispose();
+      material.normalMap?.dispose();
+      material.roughnessMap?.dispose();
+      material.dispose();
+    }
+    this.ownedMaterials.clear();
   }
 }
 

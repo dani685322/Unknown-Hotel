@@ -49,7 +49,9 @@ const clock = new THREE.Clock();
 function tick() {
   requestAnimationFrame(tick);
 
-  const dt = Math.min(clock.getDelta(), 0.1);
+  const elapsed = clock.getDelta();
+  game.updateStats(elapsed);
+  const dt = Math.min(elapsed, 0.1);
   game.update(dt);
 
   camera.position.copy(player.eyePosition);

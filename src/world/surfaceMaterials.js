@@ -167,6 +167,12 @@ function makeCanvases(kind, spec) {
       context.moveTo(x, y);
       context.lineTo(x + rand() * 120, y + rand() * 12 - 6);
       context.stroke();
+      heightContext.strokeStyle = `rgba(${150 + Math.floor(rand() * 70)}, 0, 0, .35)`;
+      heightContext.lineWidth = 1 + rand() * 2;
+      heightContext.beginPath();
+      heightContext.moveTo(x, y);
+      heightContext.lineTo(x + rand() * 120, y + rand() * 12 - 6);
+      heightContext.stroke();
     }
   }
 
@@ -183,10 +189,12 @@ function normalCanvas(heightCanvas) {
       const offset = (y * TEXTURE_SIZE + x) * 4;
       const dx = (sample(x - 1, y) - sample(x + 1, y)) / 255;
       const dy = (sample(x, y - 1) - sample(x, y + 1)) / 255;
-      const normal = new THREE.Vector3(dx * 2.2, dy * 2.2, 1).normalize();
-      output.data[offset] = Math.round((normal.x * 0.5 + 0.5) * 255);
-      output.data[offset + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
-      output.data[offset + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
+      const nx = dx * 2.2;
+      const ny = dy * 2.2;
+      const inverseLength = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+      output.data[offset] = Math.round((nx * inverseLength * 0.5 + 0.5) * 255);
+      output.data[offset + 1] = Math.round((ny * inverseLength * 0.5 + 0.5) * 255);
+      output.data[offset + 2] = Math.round((inverseLength * 0.5 + 0.5) * 255);
       output.data[offset + 3] = 255;
     }
   }
@@ -252,4 +260,3 @@ export function createRoomMaterials({ width, length, height }) {
   materials.bulb = new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffe6b0, emissiveIntensity: 2 });
   return materials;
 }
-*** End Patch

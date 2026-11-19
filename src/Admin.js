@@ -32,7 +32,6 @@ export class Admin {
       this.input.value = '';
       this.exec(line);
     });
-    this.input.addEventListener('keydown', (event) => this._onInputKey(event));
     this._toggleHandler = (event) => this._onGlobalKey(event);
     document.addEventListener('keydown', this._toggleHandler, true);
     document.addEventListener('keyup', this._toggleHandler, true);
@@ -100,6 +99,10 @@ export class Admin {
     this.register('clear', 'clear console output', () => {
       this.output.replaceChildren();
       return '';
+    });
+    this.register('stats', 'toggle the FPS and draw-call overlay', () => {
+      this.game.statsElement.hidden = !this.game.statsElement.hidden;
+      return `stats ${this.game.statsElement.hidden ? 'disabled' : 'enabled'}`;
     });
   }
 
@@ -200,7 +203,7 @@ export class Admin {
   _onGlobalKey(event) {
     if (!this.enabled) return;
     const toggle = event.code === 'Backquote' || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
-    if (toggle && !event.repeat) {
+    if (event.type === 'keydown' && toggle && !event.repeat) {
       event.preventDefault();
       event.stopImmediatePropagation();
       this.toggle();

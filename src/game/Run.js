@@ -4,6 +4,7 @@ import { Room } from '../world/Room.js';
 import { generateRun, mulberry32, ROOM_COUNT } from '../world/roomGen.js';
 import { doorCreak, unlockAudio } from '../entities/sfx.js';
 import { MainMenu } from '../ui/MainMenu.js';
+import { OptionsMenu } from '../ui/OptionsMenu.js';
 import { Admin } from '../Admin.js';
 import { EntityManager } from '../entities/EntityManager.js';
 import { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
@@ -24,11 +25,26 @@ export class Run {
     this.lamp.castShadow = true;
     this.lamp.shadow.mapSize.set(512, 512);
     this.scene.add(this.lamp, this.lamp.target);
+    this.statsElement = document.createElement('output');
+    this.statsElement.className = 'dev-stats';
+    this.statsElement.hidden = true;
+    document.body.append(this.statsElement);
+    this.statsFrames = 0;
+    this.statsElapsed = 0;
 
     this.menu = new MainMenu({
       onStart: () => { this.start(); this.requestLock(); },
       onResume: () => this.requestLock(),
       onRestart: () => { this.start(); this.requestLock(); },
+      onOptions: () => {
+        this.menu.setMode('hidden');
+        this.options.open();
+      },
+    });
+    this.options = new OptionsMenu({
+      game: this,
+      renderer,
+      onClose: () => this.menu.setMode('title'),
     });
     this.state = 'title';
     this.inventory = { keys: 0 };
@@ -95,6 +111,7 @@ export class Run {
     const group = new THREE.Group();
     const color = type === 'key' ? 0xd9ad62 : 0xb34238;
     const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.18, metalness: type === 'key' ? 0.65 : 0.05, roughness: 0.4 });
+    this.room.ownedMaterials.add(material);
     if (type === 'key') {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.035, 8, 16), material);
       ring.position.y = 0.12;
@@ -104,7 +121,9 @@ export class Run {
       group.add(stem);
     } else {
       group.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.2), material));
-      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.17, 0.21), new THREE.MeshStandardMaterial({ color: 0xe9ded0 }));
+      const crossMaterial = new THREE.MeshStandardMaterial({ color: 0xe9ded0 });
+      this.room.ownedMaterials.add(crossMaterial);
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.17, 0.21), crossMaterial);
       group.add(cross);
     }
     group.position.set(x, 0.16, z);
@@ -132,7 +151,9 @@ export class Run {
     context.font = 'bold 82px monospace';
     context.fillText(code, 256, 172);
     const texture = new THREE.CanvasTexture(canvas);
-    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.42), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8 }));
+    const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8 });
+    this.room.ownedMaterials.add(material);
+    const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.42), material);
     plaque.position.set(-this.room.width / 2 + 0.11, 1.55, this.room.length / 2 - 1.5);
     plaque.rotation.y = Math.PI / 2;
     this.room.group.add(plaque);
@@ -144,6 +165,17 @@ export class Run {
       x + 0.22 > box.minX && x - 0.22 < box.maxX &&
       z + 0.22 > box.minZ && z - 0.22 < box.maxZ
     );
+  }
+
+  updateStats(dt) {
+    if (this.statsElement.hidden || !Number.isFinite(dt) || dt <= 0) return;
+    this.statsFrames += 1;
+    this.statsElapsed += dt;
+    if (this.statsElapsed < 0.5) return;
+    const fps = Math.round(this.statsFrames / this.statsElapsed);
+    this.statsElement.textContent = `${fps} FPS  /  ${this.renderer.info.render.calls} draw calls`;
+    this.statsFrames = 0;
+    this.statsElapsed = 0;
   }
 
   findTarget() {
@@ -212,9 +244,14 @@ export class Run {
     if (dt === 0) return;
     const oldX = this.player.position.x;
     const oldZ = this.player.position.z;
+    const bounds = this.player.bounds;
+    if (this.noclip) this.player.bounds = null;
     this.player.update(dt, this.input);
-    if (this.collides(this.player.position.x, oldZ)) this.player.position.x = oldX;
-    if (this.collides(this.player.position.x, this.player.position.z)) this.player.position.z = oldZ;
+    this.player.bounds = bounds;
+    if (!this.noclip) {
+      if (this.collides(this.player.position.x, oldZ)) this.player.position.x = oldX;
+      if (this.collides(this.player.position.x, this.player.position.z)) this.player.position.z = oldZ;
+    }
 
     this.room.door.update(dt);
     this.player.bounds.minZ = this.room.door.isOpen
