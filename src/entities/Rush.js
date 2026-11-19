@@ -13,8 +13,8 @@ export class Rush extends Chaser {
     return this;
   }
 
-  update(dt, { hidden }) {
-    if (hidden) return;
+  update(dt, { hidden, hazardGrace }) {
+    if (hazardGrace || hidden) return;
     const dx = this.player.position.x - this.group.position.x;
     const dz = this.player.position.z - this.group.position.z;
     this._dist = Math.hypot(dx, dz);

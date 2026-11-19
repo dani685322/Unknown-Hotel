@@ -28,6 +28,9 @@ export class EntityManager {
 		entity.type = String(type).toLowerCase();
 		entity.spawn?.();
 		this.entities.push(entity);
+		if (entity.type === 'rush' || entity.type === 'ambush') {
+			this.game.beginEntityHazard(entity.type);
+		}
 		return entity;
 	}
 
@@ -35,6 +38,7 @@ export class EntityManager {
 		const context = {
 			hidden: Boolean(this.player.hidden || this.player.crouching),
 			lampOn: this.player.lampState === 'on',
+			hazardGrace: Boolean(this.game.entityHazard?.remaining > 0),
 		};
 		for (const entity of this.entities) {
 			if (!entity.enabled || entity.room !== this.game.room) continue;
@@ -46,7 +50,11 @@ export class EntityManager {
 			}
 		}
 	}
-
+	retreat(type) {
+		const matches = this.entities.filter((entity) => entity.type === String(type).toLowerCase());
+		for (const entity of matches) entity.destroy();
+		this.entities = this.entities.filter((entity) => !matches.includes(entity));
+	}
 	kill(idOrType) {
 		const query = String(idOrType).toLowerCase();
 		const matches = this.entities.filter((entity) =>

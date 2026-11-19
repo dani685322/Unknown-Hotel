@@ -6,7 +6,8 @@ export class Ambush extends Chaser {
     this.phase = 'stalk';
   }
 
-  update(dt, { lampOn }) {
+  update(dt, { lampOn, hazardGrace }) {
+    if (hazardGrace) return;
     if (lampOn) {
       this.phase = 'retreat';
       return;

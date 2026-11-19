@@ -54,8 +54,12 @@ function tick() {
   const dt = Math.min(elapsed, 0.1);
   game.update(dt);
 
-  camera.position.copy(player.eyePosition);
-  camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  if (game.state === 'spectator') {
+    game.updateSpectatorCamera(camera);
+  } else {
+    camera.position.copy(player.eyePosition);
+    camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  }
 
   game.updateHUD();
   input.clearOneShots();

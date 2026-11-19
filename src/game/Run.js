@@ -56,6 +56,8 @@ export class Run {
     this.networkPlayers = new Map();
     this.partyStarted = false;
     this.activeLocker = null;
+    this.entityHazard = null;
+    this.spectatorUsername = null;
     this.partySyncElapsed = 0;
     this.partyChat = new PartyChat({ game: this });
     this.multiplayer = new MultiplayerMenu({
@@ -115,6 +117,72 @@ export class Run {
     if (!this.partyStarted) return;
     const roomIndex = Math.max(0, Math.min(100, Number(state.roomIndex) || 0));
     if (roomIndex !== this.roomIndex) this.enterRoom(roomIndex, false);
+  }
+
+  beginEntityHazard(type) {
+    if (this.entityHazard) return;
+    this.entityHazard = {
+      type,
+      remaining: 5,
+      flickerRemaining: 1.32,
+      flickerElapsed: 0,
+      flickerPhase: false,
+    };
+    this.setMessage(`${type === 'rush' ? 'RUSH' : 'AMBUSH'}  /  HIDE NOW`, 5000);
+  }
+
+  updateEntityHazard(dt) {
+    const hazard = this.entityHazard;
+    if (!hazard) return;
+
+    hazard.remaining = Math.max(0, hazard.remaining - dt);
+    hazard.flickerElapsed += dt;
+    if (hazard.flickerRemaining > 0) {
+      hazard.flickerRemaining = Math.max(0, hazard.flickerRemaining - dt);
+      if (hazard.flickerElapsed >= 0.22) {
+        hazard.flickerElapsed = 0;
+        hazard.flickerPhase = !hazard.flickerPhase;
+        this.lamp.visible = hazard.flickerPhase;
+      }
+    } else {
+      this.lamp.visible = this.player.lampState === 'on';
+    }
+
+    if (hazard.remaining === 0) {
+      const isHidden = this.player.hidden || this.player.crouching;
+      if (isHidden) {
+        this.entities.retreat(hazard.type);
+        this.setMessage('Safe  /  The entity passed', 2200);
+      } else {
+        this.enterSpectatorMode(hazard.type);
+      }
+      this.entityHazard = null;
+      this.lamp.visible = this.player.lampState === 'on';
+    }
+  }
+
+  enterSpectatorMode(type) {
+    this.state = 'spectator';
+    this.player.health = 0;
+    this.player.hidden = false;
+    this.activeLocker = null;
+    this.player.velocity.set(0, 0, 0);
+    this.spectatorUsername = [...this.networkPlayers.keys()][0] ?? null;
+    document.exitPointerLock();
+    this.menu.setMode('hidden');
+    this.setMessage(`Eaten by ${type === 'rush' ? 'Rush' : 'Ambush'}  /  Spectating`, 5000);
+  }
+
+  updateSpectatorCamera(camera) {
+    if (this.state !== 'spectator') return;
+    const target = this.spectatorUsername ? this.networkPlayers.get(this.spectatorUsername) : null;
+    if (!target) {
+      camera.position.copy(this.player.eyePosition);
+      camera.lookAt(this.player.position.x, 1.2, this.player.position.z - 4);
+      return;
+    }
+    camera.position.set(target.position.x, target.position.y + 1.65, target.position.z + 3.2);
+    camera.lookAt(target.position.x, target.position.y + 1.1, target.position.z);
   }
 
   createRemotePlayer(username) {
@@ -488,7 +556,7 @@ export class Run {
   }
 
   update(dt) {
-    if (this.state !== 'playing' || this.partyChat?.opened) return;
+    if (!['playing', 'spectator'].includes(this.state) || this.partyChat?.opened) return;
     dt *= this.timeScale;
     if (this.partyStarted && this.multiplayer.ws) {
       this.partySyncElapsed += dt;
@@ -503,6 +571,13 @@ export class Run {
           crouching: this.player.crouching,
         });
       }
+    }
+    this.updateEntityHazard(dt);
+    if (this.state === 'spectator') {
+      this.room.door.update(dt);
+      this.room.update(performance.now());
+      this.entities.update(dt);
+      return;
     }
     if (this.admin.opened) {
       if (dt === 0) return;
