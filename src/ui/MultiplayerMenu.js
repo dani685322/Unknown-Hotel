@@ -87,8 +87,12 @@ export class MultiplayerMenu {
     const values = new FormData(form);
     const username = String(values.get('username')).trim();
     const password = String(values.get('password'));
-    const server = String(values.get('server')).trim().replace(/\/$/, '');
+    const server = String(values.get('server')).trim().replace(/\/$/, '').replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
     const mode = event.submitter?.value;
+    if (!/^https?:\/\//i.test(server)) {
+      this.renderAuth('Enter a valid http:// or https:// authentication server URL.');
+      return;
+    }
     if (!username || password.length < 6) {
       this.renderAuth('Username and a password of at least 6 characters are required.');
       return;
@@ -99,7 +103,7 @@ export class MultiplayerMenu {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status}` }));
       if (!response.ok) {
         this.renderAuth(result.error ?? 'Login failed.');
         return;
@@ -109,8 +113,9 @@ export class MultiplayerMenu {
       localStorage.setItem(SERVER_KEY, server.replace(/^http/, 'ws'));
       this.onSession?.(this.session);
       this.renderLobby(`${mode === 'register' ? 'Account created' : 'Signed in'} as ${result.username}.`);
-    } catch {
-      this.renderAuth('Could not reach the authentication server.');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'network request failed';
+      this.renderAuth(`Could not reach the authentication server: ${detail}`);
     }
   }
 
@@ -164,7 +169,9 @@ export class MultiplayerMenu {
 
   getApiUrl() {
     const server = this.getServerUrl();
-    return server.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+    if (server) return server.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return 'http://127.0.0.1:8080';
+    return `${location.protocol}//${location.hostname}:8080`;
   }
 
   connectLobby() {
