@@ -9,10 +9,10 @@ export class Run {
   constructor({ scene, renderer, input, player, hud, prompt, reticle }) {
     Object.assign(this, { scene, renderer, input, player, hud, prompt, reticle });
     this.scene.clear();
-    this.scene.background = new THREE.Color(0x05060a);
-    this.scene.fog = new THREE.Fog(0x05060a, 8, 34);
-    this.scene.add(new THREE.AmbientLight(0x6a6a7a, 0.6));
-    this.scene.add(new THREE.HemisphereLight(0x8fa2c0, 0x0c0c10, 0.5));
+    this.scene.background = new THREE.Color(0x111315);
+    this.scene.fog = new THREE.Fog(0x111315, 14, 48);
+    this.scene.add(new THREE.AmbientLight(0x9ba5ae, 1.35));
+    this.scene.add(new THREE.HemisphereLight(0xb9c9d8, 0x24211d, 0.95));
 
     this.menu = new MainMenu({
       onStart: () => { this.start(); this.requestLock(); },
