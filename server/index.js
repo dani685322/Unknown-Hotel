@@ -109,6 +109,7 @@ function broadcastParty(code) {
     leader: party.leader,
     members: partySockets(code).map((socket) => socket.user),
     bots: party.bots,
+    started: party.started,
   });
 }
 
@@ -235,7 +236,7 @@ websocketServer.on('connection', (socket) => {
       const code = makePartyCode();
       const name = typeof message.name === 'string' ? message.name.trim().slice(0, 30) : `${socket.user}'s party`;
       const visibility = message.visibility === 'private' ? 'private' : 'public';
-      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user, bots: [], banned: new Set() });
+      parties.set(code, { code, name: name || `${socket.user}'s party`, visibility, leader: socket.user, bots: [], banned: new Set(), started: false });
       socket.partyCode = code;
       broadcastParty(code);
       broadcastPublicParties();
@@ -272,6 +273,7 @@ websocketServer.on('connection', (socket) => {
         party.leader = remaining[0]?.user ?? '';
       }
       socket.partyCode = null;
+      socket.send(JSON.stringify({ type: 'party_left' }));
       if (partySockets(code).length === 0) parties.delete(code);
       else broadcastParty(code);
       broadcastPublicParties();
@@ -310,10 +312,45 @@ websocketServer.on('connection', (socket) => {
       if (target) {
         target.partyCode = null;
         target.send(JSON.stringify({ type: message.type === 'ban_member' ? 'party_banned' : 'party_kicked', message: message.type === 'ban_member' ? 'You were banned from this party.' : 'You were kicked from this party.' }));
+        target.send(JSON.stringify({ type: 'party_left' }));
       }
       if (party.leader === username) party.leader = socket.user;
       broadcastParty(party.code);
       broadcastPublicParties();
+      return;
+    }
+
+    if (message.type === 'start_party') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party || party.leader !== socket.user) {
+        socket.send(JSON.stringify({ type: 'error', message: 'Only the party leader can start the game.' }));
+        return;
+      }
+      const memberCount = partySockets(party.code).length + party.bots.length;
+      if (memberCount < 2) {
+        socket.send(JSON.stringify({ type: 'error', message: 'At least 2 people or bots are required to start.' }));
+        return;
+      }
+      party.started = true;
+      broadcastParty(party.code);
+      return;
+    }
+
+    if (message.type === 'player_state') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party?.started) return;
+      sendParty(socket.partyCode, {
+        type: 'player_state',
+        username: socket.user,
+        x: Number(message.x) || 0,
+        y: Number(message.y) || 0,
+        z: Number(message.z) || 0,
+        yaw: Number(message.yaw) || 0,
+        moving: Boolean(message.moving),
+        crouching: Boolean(message.crouching),
+      });
       return;
     }
 

@@ -4,10 +4,12 @@ const ACCOUNT_KEY = 'unknown-hotel.playerspassword.txt';
 const SERVER_KEY = 'unknown-hotel.websocket-url';
 
 export class MultiplayerMenu {
-  constructor({ onClose, onSession, onChat }) {
+  constructor({ onClose, onSession, onChat, onPartyStarted, onPlayerState }) {
     this.onClose = onClose;
     this.onSession = onSession;
     this.onChat = onChat;
+    this.onPartyStarted = onPartyStarted;
+    this.onPlayerState = onPlayerState;
     this.root = document.createElement('section');
     this.root.className = 'multiplayer-screen';
     this.root.hidden = true;
@@ -185,6 +187,7 @@ export class MultiplayerMenu {
       onParty: (party) => {
         this.party = party;
         this.updatePartyView();
+        if (party.started) this.onPartyStarted?.(party);
       },
       onPublicParties: (parties) => {
         this.publicParties = parties;
@@ -194,10 +197,15 @@ export class MultiplayerMenu {
         this.party = null;
         this.updatePartyView();
       },
+      onPartyLeft: () => {
+        this.party = null;
+        this.updatePartyView();
+      },
       onPlayers: (players) => {
         this.players = players;
         this.updatePlayerList();
       },
+      onPlayerState: (state) => this.onPlayerState?.(state),
     });
     this.ws.connect();
   }
@@ -234,16 +242,23 @@ export class MultiplayerMenu {
       return;
     }
     const isLeader = this.party.leader === this.account;
-    const humanControls = this.party.members.map((member) => {
-      const leaderLabel = member === this.party.leader ? ' / Leader' : '';
-      if (!isLeader || member === this.account) return `<span>${member}${leaderLabel}</span>`;
-      return `<div class="party-member-row"><b>${member}${leaderLabel}</b><div><button type="button" data-leader="${member}">Lead</button><button type="button" data-kick="${member}">Kick</button><button type="button" data-ban="${member}">Ban</button></div></div>`;
-    }).join('');
     const botControls = (this.party.bots ?? []).map((bot) =>
-      isLeader ? `<div class="party-member-row bot-member"><b>${bot}</b><button type="button" data-remove-bot="${bot}">Remove</button></div>` : `<span class="bot-member">${bot} / Bot</span>`
+      isLeader ? `<div class="party-member-row bot-member"><b>${bot}</b><button type="button" data-remove-bot="${bot}">Remove</button></div>` : `<span class="party-bot-label">${bot} / Bot</span>`
     ).join('');
-    const addBot = isLeader ? '<button type="button" id="party-add-bot">Add Bot</button>' : '';
-    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p><div class="party-members">${humanControls}${botControls}</div>${addBot}<button type="button" id="party-leave">Leave Party</button>`;
+    const followerControls = this.party.members
+      .filter((member) => member !== this.party.leader)
+      .map((member) => {
+        if (!isLeader || member === this.account) return `<span class="party-player-label">${member}</span>`;
+        return `<div class="party-member-row"><b>${member}</b><div><button type="button" data-leader="${member}">Lead</button><button type="button" data-kick="${member}">Kick</button><button type="button" data-ban="${member}">Ban</button></div></div>`;
+      }).join('');
+    const humanControls = `<div class="party-leader-block"><div class="party-member-row party-leader-row"><b>${this.party.leader} / Leader</b><span class="party-member-tag">${this.party.leader === this.account ? 'YOU' : 'LEADER'}</span></div><div class="party-members-under-leader">${followerControls}${botControls}</div></div>`;
+    const addBot = isLeader ? '<button type="button" id="party-add-bot">+ Add Bot</button>' : '';
+    const memberCount = this.party.members.length + (this.party.bots ?? []).length;
+    const canStart = memberCount >= 2;
+    const startButton = isLeader
+      ? `<button type="button" id="party-start" class="party-start ${canStart ? 'ready' : ''}" ${canStart ? '' : 'disabled'}>Start Hotel</button>`
+      : `<button type="button" class="party-start waiting" disabled>Waiting for leader</button>`;
+    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p><div class="party-members">${humanControls}</div>${addBot}${startButton}<button type="button" id="party-leave">Leave Party</button>`;
     view.querySelector('#party-leave')?.addEventListener('click', () => this.ws?.leaveParty());
     view.querySelectorAll('[data-leader]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.makeLeader(button.dataset.leader));
@@ -255,6 +270,7 @@ export class MultiplayerMenu {
       button.addEventListener('click', () => this.ws?.banMember(button.dataset.ban));
     });
     view.querySelector('#party-add-bot')?.addEventListener('click', () => this.ws?.addBot());
+    view.querySelector('#party-start')?.addEventListener('click', () => this.ws?.startParty());
     view.querySelectorAll('[data-remove-bot]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.removeBot(button.dataset.removeBot));
     });

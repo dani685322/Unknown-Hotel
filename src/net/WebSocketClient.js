@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration }) {
+  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -11,6 +11,8 @@ export class WebSocketClient {
     this.onPublicParties = onPublicParties;
     this.onMessage = onMessage;
     this.onModeration = onModeration;
+    this.onPlayerState = onPlayerState;
+    this.onPartyLeft = onPartyLeft;
     this.socket = null;
   }
 
@@ -42,6 +44,8 @@ export class WebSocketClient {
       }
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
+      if (message.type === 'player_state') this.onPlayerState?.(message);
+      if (message.type === 'party_left') this.onPartyLeft?.();
     });
     this.socket.addEventListener('close', (event) => this.onClose?.(event));
     this.socket.addEventListener('error', () => this.onError?.('Could not connect to the WebSocket server.'));
@@ -87,6 +91,14 @@ export class WebSocketClient {
 
   listPublicParties() {
     this.send({ type: 'list_public_parties' });
+  }
+
+  startParty() {
+    this.send({ type: 'start_party' });
+  }
+
+  sendPlayerState(state) {
+    this.send({ type: 'player_state', ...state });
   }
 
   sendChat(text) {

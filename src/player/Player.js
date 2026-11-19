@@ -52,6 +52,15 @@ export class Player {
   }
 
   update(dt, input) {
+    if (this.hidden) {
+      this.crouching = false;
+      this.sprinting = false;
+      this.moving = false;
+      this.state = PlayerState.IDLE;
+      this.velocity.set(0, 0, 0);
+      return;
+    }
+
     // --- stance ---
     this.crouching = !!input.crouch;
     const axes = input.moveAxes();

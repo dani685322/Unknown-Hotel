@@ -37,7 +37,7 @@ export class Admin {
     document.addEventListener('keyup', this._toggleHandler, true);
 
     this._registerBuiltins();
-    this.write('Developer console ready. Type help for commands.', 'system');
+    this.write('Developer console ready. Type /help or help for commands.', 'system');
   }
 
   register(name, help, run) {
@@ -134,7 +134,8 @@ export class Admin {
   }
 
   exec(line) {
-    const commandLine = String(line ?? '').trim();
+    let commandLine = String(line ?? '').trim();
+    if (commandLine.startsWith('/')) commandLine = commandLine.slice(1).trim();
     if (!commandLine) return '';
     this.write(`> ${commandLine}`, 'command');
     if (this.history.at(-1) !== commandLine) {
@@ -235,7 +236,7 @@ export class Admin {
 
   _complete() {
     const tokens = this.input.value.split(/\s+/);
-    const prefix = tokens.at(-1).toLowerCase();
+    const prefix = tokens.at(-1).toLowerCase().replace(/^\//, '');
     let candidates = [];
     if (tokens.length === 1) {
       candidates = Object.keys(this.commands).filter((name) => name.startsWith(prefix));
@@ -254,9 +255,14 @@ export class Admin {
   open() {
     if (this.opened) return;
     this.opened = true;
+    Object.assign(this.game.input?.keys ?? {}, { forward: false, back: false, left: false, right: false });
+    if (this.game.input) {
+      this.game.input.sprint = false;
+      this.game.input.crouch = false;
+    }
     this.root.hidden = false;
-    this.input.focus();
     if (document.pointerLockElement) document.exitPointerLock();
+    this.input.focus();
   }
 
   close() {

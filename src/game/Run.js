@@ -53,11 +53,16 @@ export class Run {
       onClose: () => this.menu.setMode('title'),
     });
     this.ownerSession = null;
+    this.networkPlayers = new Map();
+    this.partyStarted = false;
+    this.partySyncElapsed = 0;
     this.partyChat = new PartyChat({ game: this });
     this.multiplayer = new MultiplayerMenu({
       onClose: () => this.menu.setMode('title'),
       onSession: (session) => { this.ownerSession = session; },
       onChat: (message) => this.partyChat.receive(message),
+      onPartyStarted: (party) => this.startPartyMatch(party),
+      onPlayerState: (state) => this.updateRemotePlayer(state),
     });
     this.state = 'title';
     this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
@@ -73,12 +78,62 @@ export class Run {
     }
 
     document.addEventListener('pointerlockchange', () => {
-      if (this.state === 'playing') this.menu.setMode(this.input.locked ? 'hidden' : 'pause');
+      if (this.state === 'playing' && !this.admin.opened && this.input.locked) {
+        this.menu.setMode('hidden');
+      }
     });
   }
 
   requestLock() {
     if (!this.input.locked) this.renderer.domElement.requestPointerLock();
+  }
+
+  startPartyMatch(party) {
+    if (this.partyStarted) return;
+    this.partyStarted = true;
+    this.multiplayer.root.hidden = true;
+    this.start();
+    this.syncRemotePlayers(party.members);
+    this.requestLock();
+  }
+
+  createRemotePlayer(username) {
+    const group = new THREE.Group();
+    const clothes = new THREE.MeshStandardMaterial({ color: 0x59695f, roughness: 0.72 });
+    const skin = new THREE.MeshStandardMaterial({ color: 0xb79a82, roughness: 0.82 });
+    const shoe = new THREE.MeshStandardMaterial({ color: 0x171513, roughness: 0.9 });
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.52, 4, 8), clothes);
+    torso.position.y = 0.92;
+    group.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 8), skin);
+    head.position.y = 1.55;
+    group.add(head);
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.48, 3, 6), clothes);
+      arm.position.set(side * 0.34, 0.92, 0);
+      group.add(arm);
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.48, 3, 6), shoe);
+      leg.position.set(side * 0.13, 0.34, 0);
+      group.add(leg);
+    }
+    group.position.set((this.networkPlayers.size + 1) * 1.2, 0, this.room?.length / 2 - 2.8 ?? 4);
+    group.userData.username = username;
+    this.scene.add(group);
+    this.networkPlayers.set(username, group);
+  }
+
+  syncRemotePlayers(members = []) {
+    for (const username of members) {
+      if (username !== this.multiplayer.account && !this.networkPlayers.has(username)) this.createRemotePlayer(username);
+    }
+  }
+
+  updateRemotePlayer(state) {
+    if (!state.username || state.username === this.multiplayer.account) return;
+    if (!this.networkPlayers.has(state.username)) this.createRemotePlayer(state.username);
+    const mesh = this.networkPlayers.get(state.username);
+    mesh.position.set(state.x, state.y, state.z);
+    mesh.rotation.y = state.yaw;
   }
 
   start() {
@@ -322,6 +377,23 @@ export class Run {
           this.player.position.set(locker.x, 0, locker.z);
           this.setMessage('Hidden in locker');
         } else {
+          const exitDistance = 0.82;
+          this.player.position.set(
+            locker.x,
+            0,
+            locker.z + locker.facing * exitDistance
+          );
+          this.player.velocity.set(0, 0, 0);
+          this.player.hidden = false;
+          this.player.crouching = false;
+          this.player.sprinting = false;
+          this.player.moving = false;
+          this.player.state = 'idle';
+          this.input.clearOneShots();
+          this.input.keys.forward = false;
+          this.input.keys.back = false;
+          this.input.keys.left = false;
+          this.input.keys.right = false;
           this.setMessage('Left locker');
         }
       }
@@ -355,8 +427,30 @@ export class Run {
   }
 
   update(dt) {
-    if (this.state !== 'playing' || !this.input.locked || this.partyChat?.opened) return;
+    if (this.state !== 'playing' || this.partyChat?.opened) return;
     dt *= this.timeScale;
+    if (this.admin.opened) {
+      if (dt === 0) return;
+      this.room.door.update(dt);
+      this.room.update(performance.now());
+      this.entities.update(dt);
+      return;
+    }
+    if (!this.input.locked) return;
+    if (this.partyStarted && this.multiplayer.ws) {
+      this.partySyncElapsed += dt;
+      if (this.partySyncElapsed >= 0.1) {
+        this.partySyncElapsed = 0;
+        this.multiplayer.ws.sendPlayerState({
+          x: this.player.position.x,
+          y: this.player.position.y,
+          z: this.player.position.z,
+          yaw: this.player.yaw,
+          moving: this.player.moving,
+          crouching: this.player.crouching,
+        });
+      }
+    }
     if (this.input.lampPressed) this.player.lampState = this.player.lampState === 'on' ? 'off' : 'on';
     if (dt === 0) return;
     const oldX = this.player.position.x;
