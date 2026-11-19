@@ -5,6 +5,7 @@ import { generateRun, mulberry32, ROOM_COUNT } from '../world/roomGen.js';
 import { doorCreak, unlockAudio } from '../entities/sfx.js';
 import { MainMenu } from '../ui/MainMenu.js';
 import { OptionsMenu } from '../ui/OptionsMenu.js';
+import { MultiplayerMenu } from '../ui/MultiplayerMenu.js';
 import { Admin } from '../Admin.js';
 import { EntityManager } from '../entities/EntityManager.js';
 import { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
@@ -40,14 +41,19 @@ export class Run {
         this.menu.setMode('hidden');
         this.options.open();
       },
+      onMultiplayer: () => {
+        this.menu.setMode('hidden');
+        this.multiplayer.open();
+      },
     });
     this.options = new OptionsMenu({
       game: this,
       renderer,
       onClose: () => this.menu.setMode('title'),
     });
+    this.multiplayer = new MultiplayerMenu({ onClose: () => this.menu.setMode('title') });
     this.state = 'title';
-    this.inventory = { keys: 0 };
+    this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
     this.message = '';
     this.messageUntil = 0;
     this.target = null;
@@ -68,6 +74,9 @@ export class Run {
     this.clearRoom();
     this.run = generateRun(Math.floor(Math.random() * 0xffffffff), ROOM_COUNT);
     this.inventory.keys = 0;
+    this.inventory.coins = 0;
+    this.inventory.slots = [null, null, null, null, null];
+    this.player.hidden = false;
     this.player.health = this.player.maxHealth;
     this.player.stamina = 100;
     this.player.yaw = 0;
@@ -109,7 +118,7 @@ export class Run {
 
   addPickup(type, x, z) {
     const group = new THREE.Group();
-    const color = type === 'key' ? 0xd9ad62 : 0xb34238;
+    const color = type === 'key' ? 0xd9ad62 : type === 'coin' ? 0xd3a84f : type === 'flashlight' ? 0x6f8f94 : 0xb34238;
     const material = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.18, metalness: type === 'key' ? 0.65 : 0.05, roughness: 0.4 });
     this.room.ownedMaterials.add(material);
     if (type === 'key') {
@@ -119,6 +128,14 @@ export class Run {
       const stem = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.045, 0.045), material);
       stem.position.set(0.18, 0.12, 0);
       group.add(stem);
+    } else if (type === 'coin') {
+      const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.025, 16), material);
+      coin.rotation.x = Math.PI / 2;
+      group.add(coin);
+    } else if (type === 'flashlight') {
+      const flashlight = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.28, 10), material);
+      flashlight.rotation.z = Math.PI / 2;
+      group.add(flashlight);
     } else {
       group.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.2), material));
       const crossMaterial = new THREE.MeshStandardMaterial({ color: 0xe9ded0 });
@@ -187,7 +204,13 @@ export class Run {
     );
     let target = null;
     let bestDistance = 2.4;
-    for (const candidate of [this.room.door.group, ...(this.room.pickups ?? [])]) {
+    for (const candidate of [
+      this.room.door.group,
+      ...(this.room.pickups ?? []),
+      ...(this.room.drawers ?? []).map((drawer) => drawer.object),
+      ...(this.room.sideDoors ?? []).map((sideDoor) => sideDoor.object),
+      ...(this.room.hidingSpots ?? []).map((spot) => spot.object),
+    ]) {
       const point = new THREE.Vector3();
       candidate.getWorldPosition(point);
       const offset = point.sub(origin);
@@ -195,10 +218,52 @@ export class Run {
       if (distance > bestDistance || offset.normalize().dot(forward) < 0.45) continue;
       target = candidate === this.room.door.group
         ? { type: 'door', object: this.room.door }
-        : { type: candidate.userData.type, object: candidate };
+        : candidate.userData.drawer
+          ? { type: 'drawer', object: candidate }
+          : candidate.userData.hidingSpot
+            ? { type: 'locker', object: candidate }
+            : candidate.userData.sideRoomDoor
+              ? { type: 'sideDoor', object: candidate }
+              : { type: candidate.userData.type, object: candidate };
       bestDistance = distance;
     }
     return target;
+  }
+
+  addItem(type) {
+    const empty = this.inventory.slots.findIndex((slot) => slot === null);
+    if (empty < 0) {
+      this.setMessage('Hotbar is full');
+      return false;
+    }
+    this.inventory.slots[empty] = type;
+    this.setMessage(`${type === 'coin' ? 'Coin' : type === 'medkit' ? 'Medkit' : 'Flashlight'} stored in slot ${empty + 1}`);
+    return true;
+  }
+
+  useSelectedItem() {
+    const slotIndex = this.input.selectedSlot;
+    const item = this.inventory.slots[slotIndex];
+    if (!item) {
+      this.setMessage(`Slot ${slotIndex + 1} is empty`);
+      return;
+    }
+    if (item === 'medkit') {
+      if (this.player.health >= this.player.maxHealth) {
+        this.setMessage('Health is already full');
+        return;
+      }
+      this.player.heal(50);
+      this.inventory.slots[slotIndex] = null;
+      this.setMessage(`Medkit used  /  health ${this.player.health}`);
+    } else if (item === 'flashlight') {
+      this.player.lampState = this.player.lampState === 'on' ? 'off' : 'on';
+      this.setMessage(`Flashlight ${this.player.lampState}`);
+    } else if (item === 'coin') {
+      this.inventory.coins += 1;
+      this.inventory.slots[slotIndex] = null;
+      this.setMessage(`Coin added  /  ${this.inventory.coins} coins`);
+    }
   }
 
   interact() {
@@ -221,12 +286,52 @@ export class Run {
       return;
     }
 
+    if (this.target.type === 'drawer') {
+      const drawer = this.target.object;
+      if (drawer.userData.opened) {
+        this.setMessage('Drawer is empty');
+        return;
+      }
+      drawer.userData.opened = true;
+      drawer.position.x += drawer.position.x > 0 ? 0.16 : -0.16;
+      const reward = drawer.userData.reward;
+      if (reward) {
+        this.addItem(reward);
+      } else {
+        this.setMessage('The drawer is empty');
+      }
+      return;
+    }
+    if (this.target.type === 'locker') {
+      const locker = this.room.hidingSpots.find((spot) => spot.object === this.target.object);
+      if (locker) {
+        this.player.hidden = !this.player.hidden;
+        if (this.player.hidden) {
+          this.player.position.set(locker.x, 0, locker.z);
+          this.setMessage('Hidden in locker');
+        } else {
+          this.setMessage('Left locker');
+        }
+      }
+      return;
+    }
+    if (this.target.type === 'sideDoor') {
+      const sideDoor = this.target.object;
+      sideDoor.userData.open = !sideDoor.userData.open;
+      sideDoor.rotation.y = sideDoor.userData.open ? 1.1 : (sideDoor.position.z % 1 < 0 ? -0.18 : 0.18);
+      this.setMessage(sideDoor.userData.open ? 'Side-room door opened' : 'Side-room door closed');
+      return;
+    }
+
     if (this.target.type === 'key') {
       this.inventory.keys += 1;
       this.setMessage('Brass key collected');
-    } else {
-      this.player.heal(30);
-      this.setMessage(`First aid used  /  health ${this.player.health}`);
+    } else if (this.target.type === 'medkit') {
+      this.addItem('medkit');
+    } else if (this.target.type === 'coin') {
+      this.addItem('coin');
+    } else if (this.target.type === 'flashlight') {
+      this.addItem('flashlight');
     }
     this.room.group.remove(this.target.object);
     this.room.pickups = this.room.pickups.filter((pickup) => pickup !== this.target.object);
@@ -271,6 +376,7 @@ export class Run {
     this.entities.update(dt);
     this.target = this.findTarget();
     if (this.input.interactPressed) this.interact();
+    if (this.input.usePressed) this.useSelectedItem();
     if (!this.player.alive) {
       this.state = 'dead';
       this.menu.setMode('death');
@@ -291,10 +397,16 @@ export class Run {
   updateHUD() {
     const targetText = this.target?.type === 'door' ? this.target.object.prompt()
       : this.target?.type === 'key' ? '[E] Take key'
-      : this.target?.type === 'medkit' ? '[E] Use first aid' : '';
+      : this.target?.type === 'medkit' ? '[E] Store medkit'
+      : this.target?.type === 'coin' ? '[E] Take coin'
+      : this.target?.type === 'flashlight' ? '[E] Take flashlight'
+      : this.target?.type === 'drawer' ? '[E] Open drawer'
+      : this.target?.type === 'locker' ? `[E] ${this.player.hidden ? 'Leave locker' : 'Hide in locker'}`
+      : this.target?.type === 'sideDoor' ? '[E] Open side room' : '';
     const status = performance.now() < this.messageUntil ? this.message : '';
     const stamina = Math.round(this.player.stamina);
-    this.hud.innerHTML = `<div class="hud-top"><span>UNKNOWN HOTEL</span><span>${this.room?.desc.label ?? 'ROOM 001'} / 100</span></div><div class="hud-vitals"><span>HEALTH <b>${this.player.health}</b><i><em style="width:${this.player.health}%"></em></i></span><span>STAMINA <b>${stamina}</b><i><em style="width:${stamina}%"></em></i></span><span>KEYS <b>${this.inventory.keys}</b></span></div><div class="hud-state">${this.player.state.toUpperCase()}${status ? `  /  ${status}` : ''}</div>`;
+    const slots = this.inventory.slots.map((item, index) => `<span class="hotbar-slot ${index === this.input.selectedSlot ? 'active' : ''}"><b>${index + 1}</b>${item ? item.toUpperCase() : 'EMPTY'}</span>`).join('');
+    this.hud.innerHTML = `<div class="hud-top"><span>UNKNOWN HOTEL</span><span>${this.room?.desc.label ?? 'ROOM 001'} / 100</span></div><div class="hud-vitals"><span>HEALTH <b>${this.player.health}</b><i><em style="width:${this.player.health}%"></em></i></span><span>STAMINA <b>${stamina}</b><i><em style="width:${stamina}%"></em></i></span><span>KEYS <b>${this.inventory.keys}</b></span><span>COINS <b>${this.inventory.coins}</b></span></div><div class="hud-state">${this.player.state.toUpperCase()}${status ? `  /  ${status}` : ''}</div><div class="hotbar">${slots}</div>`;
     this.prompt.textContent = targetText;
     this.reticle.classList.toggle('active', Boolean(this.target));
   }

@@ -1,9 +1,10 @@
 export class MainMenu {
-	constructor({ onStart, onResume, onRestart, onOptions }) {
+	constructor({ onStart, onResume, onRestart, onOptions, onMultiplayer }) {
 		this.onStart = onStart;
 		this.onResume = onResume;
 		this.onRestart = onRestart;
 		this.onOptions = onOptions;
+		this.onMultiplayer = onMultiplayer;
 		this.root = document.createElement('section');
 		this.root.className = 'menu-screen';
 		this.root.setAttribute('aria-live', 'polite');
@@ -24,7 +25,7 @@ export class MainMenu {
 				copy: 'One hundred doors. No two rooms alike. Keep moving.',
 				action: 'Enter the hotel',
 				callback: this.onStart,
-				secondary: '<button class="menu-secondary" data-action="options">Options</button><p class="menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl crouch <span>·</span> E interact</p>',
+				secondary: '<button class="menu-secondary" data-action="options">Options</button><button class="menu-secondary" data-action="multiplayer">Multiplayer Beta</button><p class="menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl crouch <span>·</span> E interact <span>·</span> / admin</p>',
 			},
 			pause: {
 				eyebrow: 'THE HALL IS QUIET',
@@ -52,9 +53,10 @@ export class MainMenu {
 			},
 		};
 		const screen = screens[mode] ?? screens.title;
-		this.root.innerHTML = `<div class="menu-panel"><div class="menu-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="menu-eyebrow">${screen.eyebrow}</p><h1>${screen.title}</h1><p class="menu-copy">${screen.copy}</p><button class="menu-primary" data-action="primary">${screen.action}<span aria-hidden="true">↗</span></button><div class="menu-secondary-wrap">${screen.secondary}</div><p class="menu-version">UNKNOWN HOTEL <span>·</span> SINGLE PLAYER</p></div><div class="menu-edge">NO VACANCY <span>—</span> SINCE 1978</div>`;
+		this.root.innerHTML = `<div class="menu-panel"><div class="menu-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="menu-eyebrow">${screen.eyebrow}</p><h1>${screen.title}</h1><p class="menu-copy">${screen.copy}</p><button class="menu-primary" data-action="primary">${screen.action}<span aria-hidden="true">↗</span></button><div class="menu-secondary-wrap">${screen.secondary}</div><p class="menu-version">UNKNOWN HOTEL <span>·</span> <span>SINGLE PLAYER</span> <span>·</span> <span>LOCAL BETA</span></p></div><div class="menu-edge">NO VACANCY <span>—</span> SINCE 1978</div>`;
 		this.root.querySelector('[data-action="primary"]').addEventListener('click', screen.callback);
 		this.root.querySelector('[data-action="restart"]')?.addEventListener('click', this.onRestart);
 		this.root.querySelector('[data-action="options"]')?.addEventListener('click', this.onOptions);
+		this.root.querySelector('[data-action="multiplayer"]')?.addEventListener('click', this.onMultiplayer);
 	}
 }

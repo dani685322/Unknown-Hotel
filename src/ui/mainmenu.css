@@ -46,7 +46,25 @@ body { color: var(--paper); font-family: var(--mono); }
 .menu-primary:hover, .menu-primary:focus-visible { background: var(--brass); color: #14120e; }
 .menu-primary span { font-size: 19px; }
 .menu-secondary-wrap { min-height: 42px; }
-.menu-secondary { margin-top: 18px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: italic 16px var(--display); text-decoration: underline; text-underline-offset: 4px; }
+.menu-secondary { margin-top: 18px; margin-right: 18px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: italic 16px var(--display); text-decoration: underline; text-underline-offset: 4px; }
+.multiplayer-screen { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; background: rgba(5,7,7,.94); }
+.multiplayer-screen[hidden] { display: none; }
+.multiplayer-panel { width: min(420px, calc(100vw - 32px)); padding: 28px; border: 1px solid rgba(198,155,90,.52); background: #0d0e0c; }
+.multiplayer-eyebrow { margin: 0 0 8px; color: var(--brass); font: italic 12px var(--display); }
+.multiplayer-panel h2 { margin: 0 0 22px; font: italic 42px var(--display); }
+.multiplayer-auth { display: grid; gap: 14px; }
+.multiplayer-auth label { display: grid; gap: 7px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.multiplayer-auth input { height: 42px; padding: 0 10px; border: 1px solid var(--line); outline: 0; background: #080908; color: var(--paper); font: 12px var(--mono); }
+.multiplayer-actions { display: flex; gap: 8px; margin-top: 8px; }
+.multiplayer-actions button, .multiplayer-close { min-height: 42px; padding: 0 14px; border: 1px solid var(--brass); background: rgba(198,155,90,.12); color: var(--paper); cursor: pointer; font: 11px var(--mono); }
+.multiplayer-actions button.secondary, .multiplayer-close { border-color: var(--line); background: transparent; }
+.multiplayer-message { min-height: 18px; color: var(--muted); font-size: 10px; }
+.multiplayer-status, .multiplayer-player-list { border: 1px solid var(--line); }
+.multiplayer-status { display: flex; padding: 10px; justify-content: space-between; color: var(--muted); font-size: 9px; }
+.multiplayer-status b { color: var(--brass); }
+.multiplayer-player-list { margin-top: 8px; min-height: 60px; padding: 8px; }
+.multiplayer-player-list div { display: flex; align-items: center; gap: 8px; padding: 5px; font-size: 11px; }
+.multiplayer-player-list div span { width: 6px; height: 6px; border-radius: 50%; background: #83b489; }
 .menu-note { max-width: 440px; margin: 16px 0 0; color: #86837e; font: italic 14px/1.5 var(--display); }
 .menu-note span, .menu-version span, .menu-edge span { color: var(--brass); }
 .menu-version { margin: 37px 0 0; color: #686762; font-size: 9px; }
@@ -64,6 +82,10 @@ body { color: var(--paper); font-family: var(--mono); }
 #reticle { position: fixed; top: 50%; left: 50%; z-index: 2; width: 5px; height: 5px; border: 1px solid rgba(232,223,208,.72); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 #reticle.active { width: 8px; height: 8px; border-color: var(--brass); }
 #prompt { position: fixed; top: calc(50% + 24px); left: 50%; z-index: 2; color: var(--paper); font: 11px var(--mono); text-shadow: 0 1px 5px #000; transform: translateX(-50%); pointer-events: none; white-space: nowrap; }
+.hotbar { position: fixed; bottom: 26px; left: 50%; display: grid; grid-template-columns: repeat(5, 82px); gap: 6px; transform: translateX(-50%); }
+.hotbar-slot { min-height: 46px; padding: 7px 5px 5px; border: 1px solid rgba(232,223,208,.18); background: rgba(8,8,7,.76); color: #77746e; text-align: center; font: 8px var(--mono); }
+.hotbar-slot b { display: block; margin-bottom: 5px; color: var(--brass); font-size: 9px; }
+.hotbar-slot.active { border-color: var(--brass); background: rgba(198,155,90,.12); color: var(--paper); }
 
 .admin {
 	position: fixed;
@@ -100,4 +122,5 @@ body { color: var(--paper); font-family: var(--mono); }
 	.hud-vitals { gap: 8px; }
 	.hud-vitals i { width: 58px; }
 	.admin { inset: 4vh 4vw auto; }
+	.hotbar { grid-template-columns: repeat(5, 62px); bottom: 12px; }
 }

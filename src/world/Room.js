@@ -21,7 +21,9 @@ export class Room {
 
     this.lights = [];
     this.colliders = [];   // { minX, maxX, minZ, maxZ }
-    this.hidingSpots = []; // { x, z, facing }
+    this.hidingSpots = []; // { x, z, facing, object }
+    this.drawers = [];
+    this.sideDoors = [];
 
     this._build();
   }
@@ -113,9 +115,11 @@ export class Room {
 
     const door = this._box(w * 0.92, h * 0.92, 0.04, MAT.trim);
     door.position.set(x, h / 2, z + facing * (d / 2 + 0.03));
+    door.userData.hidingSpot = true;
+    door.userData.noMerge = true;
     this.group.add(door);
 
-    this.hidingSpots.push({ x, z, facing, roomIndex: this.desc.index });
+    this.hidingSpots.push({ x, z, facing, roomIndex: this.desc.index, object: door });
   }
 
   /* -------------------------------------------------------------- build */
@@ -209,6 +213,8 @@ export class Room {
     /* ------------------------------------------------------------ props */
     this._props(archetype, rand);
     this._decayDetails(rand);
+    this._addDrawerSet(rand);
+    this._addSideRoom(rand);
     this._mergeStaticMeshes();
   }
 
@@ -234,9 +240,15 @@ export class Room {
           this._collide(t, 1.4, 0.8);
         });
         scatter(2, (x, z) => {
-          const b = this._box(1.9, 0.5, 1.1, MAT.cloth);
-          b.position.set(x, 0.25, z);
-          this.group.add(b);
+          const bed = this._box(1.9, 0.5, 2.1, MAT.cloth);
+          bed.position.set(x, 0.25, z);
+          bed.userData.noMerge = true;
+          this.group.add(bed);
+          this._collide(bed, 1.9, 2.1);
+          const mattress = this._box(1.82, 0.18, 1.7, MAT.floor);
+          mattress.position.set(x, 0.58, z);
+          mattress.userData.noMerge = true;
+          this.group.add(mattress);
         });
         break;
       }
@@ -289,6 +301,57 @@ export class Room {
           this.group.add(c);
         });
       }
+    }
+  }
+
+  _addDrawerSet(rand) {
+    if (!['suite', 'closet_gauntlet', 'corridor', 'garden'].includes(this.desc.archetype)) return;
+    const side = rand() > 0.5 ? 1 : -1;
+    const z = randRangeForRoom(this.desc.length, rand);
+    const rewardIndex = Math.floor(rand() * 3);
+    const rewards = ['flashlight', 'coin', 'medkit'];
+
+    for (let i = 0; i < 3; i++) {
+      const box = this._box(0.42, 0.42, 0.62, this.materials.wood);
+      box.position.set(side * (this.width / 2 - 0.28), 0.21 + i * 0.42, z);
+      box.userData.drawer = true;
+      box.userData.noMerge = true;
+      box.userData.opened = false;
+      box.userData.reward = i === rewardIndex ? rewards[Math.floor(rand() * rewards.length)] : null;
+      this.group.add(box);
+      this.drawers.push({ object: box, opened: false });
+
+      const handle = this._box(0.05, 0.06, 0.12, this.materials.brass ?? this.materials.trim);
+      handle.position.set(side * (this.width / 2 - 0.01), 0.21 + i * 0.42, z);
+      handle.userData.noMerge = true;
+      this.group.add(handle);
+    }
+  }
+
+  _addSideRoom(rand) {
+    const count = this.desc.sideRooms ?? 1;
+    for (let i = 0; i < count; i++) {
+      if (rand() < 0.22) continue;
+      const side = i % 2 === 0 ? -1 : 1;
+      const z = -this.length / 2 + 3 + ((i + 1) / (count + 1)) * (this.length - 6);
+      const frame = this._box(0.12, 2.05, 1.35, this.materials.trim);
+      frame.position.set(side * (this.width / 2 - 0.02), 1.02, z);
+      frame.userData.noMerge = true;
+      this.group.add(frame);
+
+      const door = this._box(0.06, 1.92, 1.18, this.materials.wood);
+      door.position.set(side * (this.width / 2 - 0.09), 0.96, z);
+      door.rotation.y = rand() > 0.5 ? 0.18 : -0.18;
+      door.userData.noMerge = true;
+      door.userData.sideRoomDoor = true;
+      door.userData.open = false;
+      this.group.add(door);
+      this.sideDoors.push({ object: door, open: false });
+
+      const alcove = this._box(1.8, 2.2, 2.0, this.materials.wall);
+      alcove.position.set(side * (this.width / 2 + 0.86), 1.1, z);
+      alcove.userData.noMerge = true;
+      this.group.add(alcove);
     }
   }
 
@@ -420,6 +483,10 @@ export class Room {
     }
     this.ownedMaterials.clear();
   }
+}
+
+function randRangeForRoom(length, rand) {
+  return (rand() - 0.5) * Math.max(4, length - 6);
 }
 
 function w(mesh) { return mesh.geometry.parameters.width; }

@@ -87,6 +87,7 @@ function makeRoom(rand, index) {
     lit,
     lock,
     hidingSpots,
+    sideRooms: randInt(rand, 1, 3),
     seedOffset: randInt(rand, 1, 1e6), // per-room decoration seed
   };
 }

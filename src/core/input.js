@@ -14,6 +14,7 @@ export class Input {
     this.usePressed = false;
     this.dropPressed = false;
     this.lampPressed = false;
+    this.selectedSlot = 0;
 
     // mouse look
     this.yaw = 0;
@@ -28,8 +29,9 @@ export class Input {
     document.addEventListener('keydown', (e) => this._onKey(e, true));
     document.addEventListener('keyup', (e) => this._onKey(e, false));
 
-    this.dom.addEventListener('click', () => {
+    this.dom.addEventListener('click', (event) => {
       if (!this.locked) this.dom.requestPointerLock();
+      if (event.button === 0) this.usePressed = true;
     });
 
     document.addEventListener('pointerlockchange', () => {
@@ -57,6 +59,11 @@ export class Input {
       case 'KeyE': if (down) this.interactPressed = true; break;
       case 'KeyQ': if (down) this.usePressed = true; break;
       case 'KeyF': if (down) this.lampPressed = true; break;
+      case 'Digit1': if (down) this.selectedSlot = 0; break;
+      case 'Digit2': if (down) this.selectedSlot = 1; break;
+      case 'Digit3': if (down) this.selectedSlot = 2; break;
+      case 'Digit4': if (down) this.selectedSlot = 3; break;
+      case 'Digit5': if (down) this.selectedSlot = 4; break;
       case 'Space':
         if (down) this.dropPressed = true;
         e.preventDefault();
