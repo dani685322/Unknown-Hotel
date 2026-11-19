@@ -112,6 +112,8 @@ function broadcastParty(code) {
     bots: party.bots,
     difficulty: party.difficulty ?? 'Normal',
     started: party.started,
+    runSeed: party.runSeed ?? null,
+    roomIndex: party.roomIndex ?? 0,
   });
 }
 
@@ -264,6 +266,7 @@ websocketServer.on('connection', (socket) => {
         return;
       }
       socket.partyCode = code;
+      socket.send(JSON.stringify({ type: 'party_joined', code, name: party.name }));
       broadcastParty(code);
       broadcastPublicParties();
     }
@@ -337,7 +340,37 @@ websocketServer.on('connection', (socket) => {
         return;
       }
       party.started = true;
+      party.runSeed = (Math.floor(Math.random() * 0xffffffff) >>> 0);
+      party.roomIndex = 0;
+      const startedParty = {
+        type: 'party_started',
+        code: party.code,
+        name: party.name,
+        visibility: party.visibility,
+        leader: party.leader,
+        members: partySockets(party.code).map((member) => member.user),
+        bots: party.bots,
+        difficulty: party.difficulty ?? 'Normal',
+        started: true,
+        runSeed: party.runSeed,
+        roomIndex: 0,
+      };
+      sendParty(party.code, startedParty);
       broadcastParty(party.code);
+      return;
+    }
+
+    if (message.type === 'room_state') {
+      if (!socket.partyCode) return;
+      const party = parties.get(socket.partyCode);
+      if (!party?.started || party.leader !== socket.user) return;
+      const roomIndex = Math.max(0, Math.min(100, Number(message.roomIndex) || 0));
+      party.roomIndex = roomIndex;
+      sendParty(party.code, {
+        type: 'room_state',
+        roomIndex,
+        runSeed: party.runSeed,
+      });
       return;
     }
 

@@ -62,7 +62,12 @@ export class Run {
       onSession: (session) => { this.ownerSession = session; },
       onChat: (message) => this.partyChat.receive(message),
       onPartyStarted: (party) => this.startPartyMatch(party),
+      onPartyLeft: () => {
+        this.partyStarted = false;
+        this.networkPlayers.clear();
+      },
       onPlayerState: (state) => this.updateRemotePlayer(state),
+      onRoomState: (state) => this.syncPartyRoom(state),
     });
     this.state = 'title';
     this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
@@ -90,12 +95,25 @@ export class Run {
 
   startPartyMatch(party) {
     if (this.partyStarted) return;
-    this.difficulty = party.difficulty ?? 'Normal';
-    this.partyStarted = true;
-    this.multiplayer.root.hidden = true;
-    this.start();
-    this.syncRemotePlayers(party.members);
-    this.requestLock();
+    try {
+      this.difficulty = party.difficulty ?? 'Normal';
+      this.partyStarted = true;
+      this.multiplayer.root.hidden = true;
+      this.start(party.runSeed, party.roomIndex ?? 0);
+      this.syncRemotePlayers(party.members ?? []);
+      this.requestLock();
+    } catch (error) {
+      this.partyStarted = false;
+      this.multiplayer.root.hidden = false;
+      console.error('Party start failed:', error);
+      this.multiplayer.setLobbyStatus(`Could not start: ${error instanceof Error ? error.message : 'runtime error'}`, 'error');
+    }
+  }
+
+  syncPartyRoom(state) {
+    if (!this.partyStarted) return;
+    const roomIndex = Math.max(0, Math.min(100, Number(state.roomIndex) || 0));
+    if (roomIndex !== this.roomIndex) this.enterRoom(roomIndex, false);
   }
 
   createRemotePlayer(username) {
@@ -137,10 +155,10 @@ export class Run {
     mesh.rotation.y = state.yaw;
   }
 
-  start() {
+  start(seed = Math.floor(Math.random() * 0xffffffff), roomIndex = 0) {
     this.entities.clear();
     this.clearRoom();
-    this.run = generateRun(Math.floor(Math.random() * 0xffffffff), ROOM_COUNT);
+    this.run = generateRun(seed >>> 0, ROOM_COUNT);
     this.inventory.keys = 0;
     this.inventory.coins = 0;
     this.inventory.slots = [null, null, null, null, null];
@@ -150,7 +168,8 @@ export class Run {
     this.player.yaw = 0;
     this.player.pitch = 0;
     this.state = 'playing';
-    this.enterRoom(0);
+    this.enterRoom(0, false);
+    if (roomIndex > 0) this.enterRoom(roomIndex, false);
     this.menu.setMode('hidden');
     unlockAudio();
   }
@@ -162,7 +181,7 @@ export class Run {
     this.room = null;
   }
 
-  enterRoom(index) {
+  enterRoom(index, syncParty = true) {
     this.entities?.clear();
     this.clearRoom();
     this.roomIndex = index;
@@ -174,6 +193,9 @@ export class Run {
     this.player.velocity.set(0, 0, 0);
     this.addRoomItems();
     if (index > 0) this.rollPartySpawns(index);
+    if (syncParty && this.partyStarted && this.multiplayer.ws) {
+      this.multiplayer.ws.sendRoomState(index);
+    }
     this.setMessage(`${this.room.desc.label}  /  ${this.room.desc.archetype.replaceAll('_', ' ')}`, 2800);
   }
 
@@ -442,14 +464,6 @@ export class Run {
   update(dt) {
     if (this.state !== 'playing' || this.partyChat?.opened) return;
     dt *= this.timeScale;
-    if (this.admin.opened) {
-      if (dt === 0) return;
-      this.room.door.update(dt);
-      this.room.update(performance.now());
-      this.entities.update(dt);
-      return;
-    }
-    if (!this.input.locked) return;
     if (this.partyStarted && this.multiplayer.ws) {
       this.partySyncElapsed += dt;
       if (this.partySyncElapsed >= 0.1) {
@@ -464,6 +478,14 @@ export class Run {
         });
       }
     }
+    if (this.admin.opened) {
+      if (dt === 0) return;
+      this.room.door.update(dt);
+      this.room.update(performance.now());
+      this.entities.update(dt);
+      return;
+    }
+    if (!this.input.locked) return;
     if (this.input.lampPressed) this.player.lampState = this.player.lampState === 'on' ? 'off' : 'on';
     if (dt === 0) return;
     const oldX = this.player.position.x;

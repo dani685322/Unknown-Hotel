@@ -4,12 +4,14 @@ const ACCOUNT_KEY = 'unknown-hotel.playerspassword.txt';
 const SERVER_KEY = 'unknown-hotel.websocket-url';
 
 export class MultiplayerMenu {
-  constructor({ onClose, onSession, onChat, onPartyStarted, onPlayerState }) {
+  constructor({ onClose, onSession, onChat, onPartyStarted, onPartyLeft, onPlayerState, onRoomState }) {
     this.onClose = onClose;
     this.onSession = onSession;
     this.onChat = onChat;
     this.onPartyStarted = onPartyStarted;
+    this.onPartyLeft = onPartyLeft;
     this.onPlayerState = onPlayerState;
+    this.onRoomState = onRoomState;
     this.root = document.createElement('section');
     this.root.className = 'multiplayer-screen';
     this.root.hidden = true;
@@ -155,6 +157,7 @@ export class MultiplayerMenu {
     this.root.querySelector('#party-join').addEventListener('click', () => this.joinParty());
     this.updatePlayerList();
     this.updatePartyView();
+    queueMicrotask(() => this.connectLobby());
   }
 
   getServerUrl() {
@@ -188,6 +191,7 @@ export class MultiplayerMenu {
       onParty: (party) => {
         this.party = party;
         this.updatePartyView();
+        this.setLobbyStatus(`Joined ${party.name}`, 'ok');
         if (party.started) this.onPartyStarted?.(party);
       },
       onPublicParties: (parties) => {
@@ -201,12 +205,21 @@ export class MultiplayerMenu {
       onPartyLeft: () => {
         this.party = null;
         this.updatePartyView();
+        this.onPartyLeft?.();
+      },
+      onPartyJoined: (joined) => {
+        this.setLobbyStatus(`Joined ${joined.name ?? 'party'} (${joined.code})`, 'ok');
       },
       onPlayers: (players) => {
         this.players = players;
         this.updatePlayerList();
       },
       onPlayerState: (state) => this.onPlayerState?.(state),
+      onPartyStarted: (party) => {
+        this.setLobbyStatus('Starting Hotel...', 'pending');
+        this.onPartyStarted?.(party);
+      },
+      onRoomState: (state) => this.onRoomState?.(state),
     });
     this.ws.connect();
   }
@@ -223,12 +236,18 @@ export class MultiplayerMenu {
   }
 
   joinParty() {
-    const code = this.root.querySelector('#party-code')?.value.trim();
+    const code = this.root.querySelector('#party-code')?.value.trim().toUpperCase();
     if (!code) {
       this.setLobbyStatus('Enter a party code.', 'error');
       return;
     }
-    this.ws?.joinParty(code);
+    if (!this.ws?.socket || this.ws.socket.readyState !== WebSocket.OPEN) {
+      this.setLobbyStatus('Connecting before joining. Try again in a moment.', 'pending');
+      this.connectLobby();
+      return;
+    }
+    this.setLobbyStatus(`Joining party ${code}...`, 'pending');
+    this.ws.joinParty(code);
   }
 
   updatePartyView() {
@@ -276,7 +295,14 @@ export class MultiplayerMenu {
     });
     view.querySelector('#party-add-bot')?.addEventListener('click', () => this.ws?.addBot());
     view.querySelector('#party-difficulty-live')?.addEventListener('change', (event) => this.ws?.setDifficulty(event.target.value));
-    view.querySelector('#party-start')?.addEventListener('click', () => this.ws?.startParty());
+    view.querySelector('#party-start')?.addEventListener('click', () => {
+      if (!this.ws?.socket || this.ws.socket.readyState !== WebSocket.OPEN) {
+        this.setLobbyStatus('Not connected. Press Connect, then try again.', 'error');
+        return;
+      }
+      this.setLobbyStatus('Starting Hotel...', 'pending');
+      this.ws.startParty();
+    });
     view.querySelectorAll('[data-remove-bot]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.removeBot(button.dataset.removeBot));
     });

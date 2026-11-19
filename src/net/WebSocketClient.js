@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft }) {
+  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -13,6 +13,9 @@ export class WebSocketClient {
     this.onModeration = onModeration;
     this.onPlayerState = onPlayerState;
     this.onPartyLeft = onPartyLeft;
+    this.onPartyJoined = onPartyJoined;
+    this.onPartyStarted = onPartyStarted;
+    this.onRoomState = onRoomState;
     this.socket = null;
   }
 
@@ -33,6 +36,8 @@ export class WebSocketClient {
       if (message.type === 'players') this.onPlayers?.(message.players ?? []);
       if (message.type === 'party') this.onParty?.(message);
       if (message.type === 'public_parties') this.onPublicParties?.(message.parties ?? []);
+      if (message.type === 'party_joined') this.onPartyJoined?.(message);
+      if (message.type === 'party_started') this.onPartyStarted?.(message);
       if (message.type === 'party_full') this.onError?.(message.message ?? 'The party is full.');
       if (message.type === 'party_kicked') {
         this.onModeration?.(message.message ?? 'You were kicked from the party.');
@@ -45,6 +50,7 @@ export class WebSocketClient {
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
       if (message.type === 'player_state') this.onPlayerState?.(message);
+      if (message.type === 'room_state') this.onRoomState?.(message);
       if (message.type === 'party_left') this.onPartyLeft?.();
     });
     this.socket.addEventListener('close', (event) => this.onClose?.(event));
@@ -103,6 +109,10 @@ export class WebSocketClient {
 
   sendPlayerState(state) {
     this.send({ type: 'player_state', ...state });
+  }
+
+  sendRoomState(roomIndex) {
+    this.send({ type: 'room_state', roomIndex });
   }
 
   sendChat(text) {
