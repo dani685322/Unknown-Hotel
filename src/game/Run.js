@@ -55,6 +55,7 @@ export class Run {
     this.ownerSession = null;
     this.networkPlayers = new Map();
     this.partyStarted = false;
+    this.activeLocker = null;
     this.partySyncElapsed = 0;
     this.partyChat = new PartyChat({ game: this });
     this.multiplayer = new MultiplayerMenu({
@@ -183,6 +184,8 @@ export class Run {
 
   enterRoom(index, syncParty = true) {
     this.entities?.clear();
+    this.activeLocker = null;
+    this.player.hidden = false;
     this.clearRoom();
     this.roomIndex = index;
     this.room = new Room(this.run.rooms[index]);
@@ -369,6 +372,27 @@ export class Run {
   }
 
   interact() {
+    if (this.player.hidden) {
+      const locker = this.activeLocker;
+      if (locker) {
+        const exitDistance = 0.82;
+        this.player.position.set(locker.x, 0, locker.z + locker.facing * exitDistance);
+        this.player.velocity.set(0, 0, 0);
+        this.player.hidden = false;
+        this.player.crouching = false;
+        this.player.sprinting = false;
+        this.player.moving = false;
+        this.player.state = 'idle';
+        this.activeLocker = null;
+        this.input.clearOneShots();
+        this.input.keys.forward = false;
+        this.input.keys.back = false;
+        this.input.keys.left = false;
+        this.input.keys.right = false;
+        this.setMessage('Left locker');
+      }
+      return;
+    }
     if (!this.target) return;
     if (this.target.type === 'door') {
       const door = this.target.object;
@@ -409,6 +433,7 @@ export class Run {
       if (locker) {
         this.player.hidden = !this.player.hidden;
         if (this.player.hidden) {
+          this.activeLocker = locker;
           this.player.position.set(locker.x, 0, locker.z);
           this.setMessage('Hidden in locker');
         } else {
@@ -420,6 +445,7 @@ export class Run {
           );
           this.player.velocity.set(0, 0, 0);
           this.player.hidden = false;
+          this.activeLocker = null;
           this.player.crouching = false;
           this.player.sprinting = false;
           this.player.moving = false;

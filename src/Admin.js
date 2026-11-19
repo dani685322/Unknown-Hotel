@@ -100,6 +100,14 @@ export class Admin {
       this.output.replaceChildren();
       return '';
     });
+    this.register('close', 'close the developer console', () => {
+      queueMicrotask(() => this.close());
+      return 'Closing developer console.';
+    });
+    this.register('terminal', 'close the developer console', () => {
+      queueMicrotask(() => this.close());
+      return 'Closing developer console.';
+    });
     this.register('stats', 'toggle the FPS and draw-call overlay', () => {
       this.game.statsElement.hidden = !this.game.statsElement.hidden;
       return `stats ${this.game.statsElement.hidden ? 'disabled' : 'enabled'}`;
@@ -203,8 +211,8 @@ export class Admin {
 
   _onGlobalKey(event) {
     if (!this.enabled || this.game.ownerSession?.role !== 'owner') return;
-    const toggle = event.code === 'Backquote' || event.code === 'Slash' || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
-    if (event.type === 'keydown' && toggle && !event.repeat) {
+    const shortcut = event.code === 'Backquote' || (event.code === 'Slash' && !this.opened) || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
+    if (event.type === 'keydown' && shortcut && !event.repeat) {
       event.preventDefault();
       event.stopImmediatePropagation();
       this.toggle();
@@ -214,12 +222,13 @@ export class Admin {
   }
 
   _trap(event) {
-    event.preventDefault();
     event.stopImmediatePropagation();
     if (event.type !== 'keydown') return;
     if (event.code === 'Escape') {
+      event.preventDefault();
       this.close();
     } else if (event.code === 'Tab') {
+      event.preventDefault();
       this._complete();
     } else if (event.code === 'ArrowUp') {
       event.preventDefault();
