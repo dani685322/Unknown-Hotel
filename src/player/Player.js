@@ -28,6 +28,8 @@ export class Player {
     this.godmode = false;
     this.silent = false;   // Hider class
     this.speedMul = 1;     // Vitamins / class buffs
+    this.hidden = false;
+    this.lampState = 'on';
 
     this.bounds = null;    // { minX, maxX, minZ, maxZ }
   }

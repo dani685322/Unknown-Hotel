@@ -41,6 +41,14 @@ export class MainMenu {
 				callback: this.onRestart,
 				secondary: '',
 			},
+			death: {
+				eyebrow: 'THE HOTEL KEEPS ITS GUESTS',
+				title: 'Lost in<br>the halls.',
+				copy: 'The corridor falls quiet again.',
+				action: 'Try another run',
+				callback: this.onRestart,
+				secondary: '',
+			},
 		};
 		const screen = screens[mode] ?? screens.title;
 		this.root.innerHTML = `<div class="menu-panel"><div class="menu-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="menu-eyebrow">${screen.eyebrow}</p><h1>${screen.title}</h1><p class="menu-copy">${screen.copy}</p><button class="menu-primary" data-action="primary">${screen.action}<span aria-hidden="true">↗</span></button><div class="menu-secondary-wrap">${screen.secondary}</div><p class="menu-version">UNKNOWN HOTEL <span>·</span> SINGLE PLAYER</p></div><div class="menu-edge">NO VACANCY <span>—</span> SINCE 1978</div>`;

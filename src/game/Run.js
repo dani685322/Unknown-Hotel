@@ -4,15 +4,26 @@ import { Room } from '../world/Room.js';
 import { generateRun, mulberry32, ROOM_COUNT } from '../world/roomGen.js';
 import { doorCreak, unlockAudio } from '../entities/sfx.js';
 import { MainMenu } from '../ui/MainMenu.js';
+import { Admin } from '../Admin.js';
+import { EntityManager } from '../entities/EntityManager.js';
+import { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
 
 export class Run {
-  constructor({ scene, renderer, input, player, hud, prompt, reticle }) {
-    Object.assign(this, { scene, renderer, input, player, hud, prompt, reticle });
+  constructor({ scene, renderer, input, player, camera, hud, prompt, reticle }) {
+    Object.assign(this, { scene, renderer, input, player, camera, hud, prompt, reticle });
+    this.timeScale = 1;
+    this.noclip = false;
+    this.tuning = { DIFFICULTY, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA };
     this.scene.clear();
-    this.scene.background = new THREE.Color(0x111315);
-    this.scene.fog = new THREE.Fog(0x111315, 14, 48);
-    this.scene.add(new THREE.AmbientLight(0x9ba5ae, 1.35));
-    this.scene.add(new THREE.HemisphereLight(0xb9c9d8, 0x24211d, 0.95));
+    this.scene.background = new THREE.Color(0x0a0705);
+    this.scene.fog = new THREE.FogExp2(0x0a0705, 0.045);
+    this.scene.add(new THREE.AmbientLight(0x8a7560, 0.16));
+    this.scene.add(new THREE.HemisphereLight(0xb9a68c, 0x17100c, 0.18));
+
+    this.lamp = new THREE.SpotLight(0xffd49a, 28, 24, Math.PI / 7, 0.45, 1.4);
+    this.lamp.castShadow = true;
+    this.lamp.shadow.mapSize.set(512, 512);
+    this.scene.add(this.lamp, this.lamp.target);
 
     this.menu = new MainMenu({
       onStart: () => { this.start(); this.requestLock(); },
@@ -24,6 +35,8 @@ export class Run {
     this.message = '';
     this.messageUntil = 0;
     this.target = null;
+    this.entities = new EntityManager({ game: this, scene, player });
+    this.admin = new Admin({ game: this, scene, player, entities: this.entities });
 
     document.addEventListener('pointerlockchange', () => {
       if (this.state === 'playing') this.menu.setMode(this.input.locked ? 'hidden' : 'pause');
@@ -35,6 +48,7 @@ export class Run {
   }
 
   start() {
+    this.entities.clear();
     this.clearRoom();
     this.run = generateRun(Math.floor(Math.random() * 0xffffffff), ROOM_COUNT);
     this.inventory.keys = 0;
@@ -56,6 +70,7 @@ export class Run {
   }
 
   enterRoom(index) {
+    this.entities?.clear();
     this.clearRoom();
     this.roomIndex = index;
     this.room = new Room(this.run.rooms[index]);
@@ -124,6 +139,7 @@ export class Run {
   }
 
   collides(x, z) {
+    if (this.noclip) return false;
     return this.room.colliders.some((box) =>
       x + 0.22 > box.minX && x - 0.22 < box.maxX &&
       z + 0.22 > box.minZ && z - 0.22 < box.maxZ
@@ -191,6 +207,9 @@ export class Run {
 
   update(dt) {
     if (this.state !== 'playing' || !this.input.locked) return;
+    dt *= this.timeScale;
+    if (this.input.lampPressed) this.player.lampState = this.player.lampState === 'on' ? 'off' : 'on';
+    if (dt === 0) return;
     const oldX = this.player.position.x;
     const oldZ = this.player.position.z;
     this.player.update(dt, this.input);
@@ -202,8 +221,24 @@ export class Run {
       ? -this.room.length / 2 - 0.5
       : -this.room.length / 2 + 0.35;
     this.room.update(performance.now());
+    const forwardX = -Math.sin(this.player.yaw) * Math.cos(this.player.pitch);
+    const forwardY = Math.sin(this.player.pitch);
+    const forwardZ = -Math.cos(this.player.yaw) * Math.cos(this.player.pitch);
+    this.lamp.position.copy(this.player.eyePosition);
+    this.lamp.target.position.set(
+      this.player.position.x + forwardX * 18,
+      this.player.eyePosition.y + forwardY * 18,
+      this.player.position.z + forwardZ * 18,
+    );
+    this.lamp.visible = this.player.lampState === 'on';
+    this.entities.update(dt);
     this.target = this.findTarget();
     if (this.input.interactPressed) this.interact();
+    if (!this.player.alive) {
+      this.state = 'dead';
+      this.menu.setMode('death');
+      document.exitPointerLock();
+    }
 
     if (this.room.door.isOpen && this.player.position.z < -this.room.length / 2 + 0.25) {
       if (this.roomIndex + 1 >= this.run.count) {

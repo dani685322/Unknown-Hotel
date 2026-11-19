@@ -13,6 +13,7 @@ export class Input {
     this.interactPressed = false;
     this.usePressed = false;
     this.dropPressed = false;
+    this.lampPressed = false;
 
     // mouse look
     this.yaw = 0;
@@ -55,6 +56,7 @@ export class Input {
 
       case 'KeyE': if (down) this.interactPressed = true; break;
       case 'KeyQ': if (down) this.usePressed = true; break;
+      case 'KeyF': if (down) this.lampPressed = true; break;
       case 'Space':
         if (down) this.dropPressed = true;
         e.preventDefault();
@@ -66,6 +68,7 @@ export class Input {
     this.interactPressed = false;
     this.usePressed = false;
     this.dropPressed = false;
+    this.lampPressed = false;
   }
 
   moveAxes() {

@@ -12,7 +12,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.55;
+renderer.toneMappingExposure = 0.9;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
 
 // ------------------------------------------------------------------- scene
@@ -34,6 +37,7 @@ const game = new Run({
   renderer,
   input,
   player,
+  camera,
   hud,
   prompt: document.getElementById('prompt'),
   reticle: document.getElementById('reticle'),

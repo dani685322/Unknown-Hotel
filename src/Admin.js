@@ -173,14 +173,16 @@ export class Admin {
     if (!path?.length || path.some((part) => !part || BLOCKED_PATHS.has(part))) return 'Usage: set <key> <value>';
     const valueText = args.slice(1).join(' ');
     if (!valueText) return 'Usage: set <key> <value>';
-    const root = path[0] === 'player' ? this.player : this.game.tuning;
+    const isPlayerSetting = path[0] === 'player';
+    const root = isPlayerSetting ? this.player : this.game.tuning;
+    const segments = isPlayerSetting ? path.slice(1) : path;
     if (!root || path[0] === 'scene' || path[0] === 'game') return 'set supports player.* and tuning keys only.';
     let target = root;
-    for (const part of path.slice(1, -1)) {
+    for (const part of segments.slice(0, -1)) {
       if (!target[part] || typeof target[part] !== 'object') return `Unknown setting: ${args[0]}`;
       target = target[part];
     }
-    const key = path.at(-1);
+    const key = segments.at(-1);
     if (!(key in target) || typeof target[key] === 'object') return `Unknown setting: ${args[0]}`;
     const oldValue = target[key];
     let value = valueText;
@@ -213,6 +215,8 @@ export class Admin {
     if (event.type !== 'keydown') return;
     if (event.code === 'Escape') {
       this.close();
+    } else if (event.code === 'Tab') {
+      this._complete();
     } else if (event.code === 'ArrowUp') {
       event.preventDefault();
       this.historyIndex = Math.max(0, this.historyIndex - 1);
@@ -223,13 +227,6 @@ export class Admin {
       this.historyIndex = Math.min(this.history.length, this.historyIndex + 1);
       this.input.value = this.history[this.historyIndex] ?? '';
       this.input.setSelectionRange(this.input.value.length, this.input.value.length);
-    }
-  }
-
-  _onInputKey(event) {
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      this._complete();
     }
   }
 
