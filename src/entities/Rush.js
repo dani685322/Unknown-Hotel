@@ -14,13 +14,13 @@ export class Rush extends Chaser {
   }
 
   update(dt, { hidden, hazardGrace }) {
-    if (hazardGrace || hidden) return;
+    if (hazardGrace || hidden || this.player.hidden) return;
     const dx = this.player.position.x - this.group.position.x;
     const dz = this.player.position.z - this.group.position.z;
     this._dist = Math.hypot(dx, dz);
     this._speed = this._dist < 12 ? this.speed : this.speed * 0.55;
     this.speed = this._speed;
-    super.update(dt);
+    super.update(dt, { hidden });
   }
 }
 

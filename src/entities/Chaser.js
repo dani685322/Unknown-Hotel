@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 const COLORS = {
   chaser: 0x3c2829,
-  rush: 0x7d201a,
-  ambush: 0x29384a,
+  rush: 0xd52a22,
+  ambush: 0x2fb84e,
 };
 
 export class Chaser {
@@ -21,8 +21,8 @@ export class Chaser {
     const material = new THREE.MeshStandardMaterial({
       color: COLORS[type] ?? COLORS.chaser,
       roughness: 0.9,
-      emissive: type === 'rush' ? 0x320500 : 0x080506,
-      emissiveIntensity: 0.45,
+      emissive: type === 'rush' ? 0xff1f12 : type === 'ambush' ? 0x18a84a : 0x080506,
+      emissiveIntensity: type === 'rush' || type === 'ambush' ? 0.7 : 0.45,
     });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 3, 6), material);
     body.position.y = 0.8;
@@ -34,8 +34,9 @@ export class Chaser {
     room.group.add(this.group);
   }
 
-  update(dt) {
+  update(dt, context = {}) {
     if (!this.enabled || this.attackCooldown > 0) this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+    if (context.hidden || this.player.hidden) return;
     const dx = this.player.position.x - this.group.position.x;
     const dz = this.player.position.z - this.group.position.z;
     const distance = Math.hypot(dx, dz);

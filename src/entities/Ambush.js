@@ -6,14 +6,17 @@ export class Ambush extends Chaser {
     this.phase = 'stalk';
   }
 
-  update(dt, { lampOn, hazardGrace }) {
-    if (hazardGrace) return;
+  update(dt, { hidden, lampOn, hazardGrace }) {
+    if (hazardGrace || hidden || this.player.hidden) {
+      this.phase = 'waiting';
+      return;
+    }
     if (lampOn) {
       this.phase = 'retreat';
       return;
     }
     this.phase = 'stalk';
-    super.update(dt);
+    super.update(dt, { hidden });
   }
 }
 

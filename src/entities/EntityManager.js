@@ -17,8 +17,13 @@ export class EntityManager {
 		const EntityType = ENTITY_TYPES[String(type).toLowerCase()];
 		if (!EntityType || roomIndex !== this.game.roomIndex || !this.game.room) return null;
 		const room = this.game.room;
-		const z = Math.max(-room.length / 2 + 2, this.player.position.z - Math.min(9, room.length / 3));
-		const x = Math.max(-room.width / 2 + 0.8, Math.min(room.width / 2 - 0.8, this.player.position.x));
+		const isHazard = ['rush', 'ambush'].includes(String(type).toLowerCase());
+		const z = isHazard
+			? -room.length / 2 + 2
+			: Math.max(-room.length / 2 + 2, this.player.position.z - Math.min(9, room.length / 3));
+		const x = isHazard
+			? Math.max(-room.width / 2 + 0.8, Math.min(room.width / 2 - 0.8, this.player.position.x))
+			: Math.max(-room.width / 2 + 0.8, Math.min(room.width / 2 - 0.8, this.player.position.x));
 		const entity = new EntityType({
 			id: `entity-${this.nextId++}`,
 			room,
