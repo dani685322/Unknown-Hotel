@@ -178,78 +178,78 @@ function normalCanvas(heightCanvas) {
   const source = context.getImageData(0, 0, TEXTURE_SIZE, TEXTURE_SIZE).data;
   const output = context.createImageData(TEXTURE_SIZE, TEXTURE_SIZE);
   const sample = (x, y) => source[(y * TEXTURE_SIZE + x) * 4];
-+  for (let y = 1; y < TEXTURE_SIZE - 1; y++) {
-+    for (let x = 1; x < TEXTURE_SIZE - 1; x++) {
-+      const offset = (y * TEXTURE_SIZE + x) * 4;
-+      const dx = (sample(x - 1, y) - sample(x + 1, y)) / 255;
-+      const dy = (sample(x, y - 1) - sample(x, y + 1)) / 255;
-+      const normal = new THREE.Vector3(dx * 2.2, dy * 2.2, 1).normalize();
-+      output.data[offset] = Math.round((normal.x * 0.5 + 0.5) * 255);
-+      output.data[offset + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
-+      output.data[offset + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
-+      output.data[offset + 3] = 255;
-+    }
-+  }
-+  context.putImageData(output, 0, 0);
-+  return heightCanvas;
-+}
-+
-+function makeTexture(canvas, color = false) {
-+  const texture = new THREE.CanvasTexture(canvas);
-+  texture.wrapS = THREE.RepeatWrapping;
-+  texture.wrapT = THREE.RepeatWrapping;
-+  texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-+  texture.anisotropy = 4;
-+  return texture;
-+}
-+
-+const SHARED_TEXTURES = Object.fromEntries(Object.entries(SURFACES).map(([kind, spec]) => {
-+  const canvases = makeCanvases(kind, spec);
-+  return [kind, {
-+    map: makeTexture(canvases.canvas, true),
-+    normalMap: makeTexture(normalCanvas(canvases.heightCanvas)),
-+    roughnessMap: makeTexture(canvases.roughCanvas),
-+  }];
-+}));
-+
-+const MATERIAL_OPTIONS = {
-+  wall: { roughness: 0.9, metalness: 0.02 },
-+  floor: { roughness: 0.82, metalness: 0.04 },
-+  ceiling: { roughness: 0.96, metalness: 0 },
-+  trim: { roughness: 0.72, metalness: 0.02 },
-+  wood: { roughness: 0.82, metalness: 0 },
-+  cloth: { roughness: 0.95, metalness: 0 },
-+  metal: { roughness: 0.62, metalness: 0.5 },
-+};
-+
-+export function createRoomMaterials({ width, length, height }) {
-+  const repeatByKind = {
-+    wall: [width / 2, length / 4],
-+    floor: [width / 2.5, length / 2.5],
-+    ceiling: [width / 3, length / 3],
-+    trim: [width / 2, length / 3],
-+    wood: [2, 2],
-+    cloth: [2, 2],
-+    metal: [2, 2],
-+  };
-+  const materials = {};
-+  for (const [kind, shared] of Object.entries(SHARED_TEXTURES)) {
-+    const [repeatX, repeatY] = repeatByKind[kind] ?? [1, 1];
-+    const map = shared.map.clone();
-+    const normalMap = shared.normalMap.clone();
-+    const roughnessMap = shared.roughnessMap.clone();
-+    for (const texture of [map, normalMap, roughnessMap]) texture.repeat.set(repeatX, repeatY);
-+    materials[kind] = new THREE.MeshStandardMaterial({
-+      color: 0xffffff,
-+      ...MATERIAL_OPTIONS[kind],
-+      map,
-+      normalMap,
-+      roughnessMap,
-+      normalScale: new THREE.Vector2(kind === 'wall' ? 0.38 : 0.22, kind === 'wall' ? 0.38 : 0.22),
-+    });
-+  }
-+  materials.foliage = new THREE.MeshStandardMaterial({ color: 0x2c5a35, roughness: 0.9 });
-+  materials.bulb = new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffe6b0, emissiveIntensity: 2 });
-+  return materials;
-+}
+  for (let y = 1; y < TEXTURE_SIZE - 1; y++) {
+    for (let x = 1; x < TEXTURE_SIZE - 1; x++) {
+      const offset = (y * TEXTURE_SIZE + x) * 4;
+      const dx = (sample(x - 1, y) - sample(x + 1, y)) / 255;
+      const dy = (sample(x, y - 1) - sample(x, y + 1)) / 255;
+      const normal = new THREE.Vector3(dx * 2.2, dy * 2.2, 1).normalize();
+      output.data[offset] = Math.round((normal.x * 0.5 + 0.5) * 255);
+      output.data[offset + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
+      output.data[offset + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
+      output.data[offset + 3] = 255;
+    }
+  }
+  context.putImageData(output, 0, 0);
+  return heightCanvas;
+}
+
+function makeTexture(canvas, color = false) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+const SHARED_TEXTURES = Object.fromEntries(Object.entries(SURFACES).map(([kind, spec]) => {
+  const canvases = makeCanvases(kind, spec);
+  return [kind, {
+    map: makeTexture(canvases.canvas, true),
+    normalMap: makeTexture(normalCanvas(canvases.heightCanvas)),
+    roughnessMap: makeTexture(canvases.roughCanvas),
+  }];
+}));
+
+const MATERIAL_OPTIONS = {
+  wall: { roughness: 0.9, metalness: 0.02 },
+  floor: { roughness: 0.82, metalness: 0.04 },
+  ceiling: { roughness: 0.96, metalness: 0 },
+  trim: { roughness: 0.72, metalness: 0.02 },
+  wood: { roughness: 0.82, metalness: 0 },
+  cloth: { roughness: 0.95, metalness: 0 },
+  metal: { roughness: 0.62, metalness: 0.5 },
+};
+
+export function createRoomMaterials({ width, length, height }) {
+  const repeatByKind = {
+    wall: [width / 2, length / 4],
+    floor: [width / 2.5, length / 2.5],
+    ceiling: [width / 3, length / 3],
+    trim: [width / 2, length / 3],
+    wood: [2, 2],
+    cloth: [2, 2],
+    metal: [2, 2],
+  };
+  const materials = {};
+  for (const [kind, shared] of Object.entries(SHARED_TEXTURES)) {
+    const [repeatX, repeatY] = repeatByKind[kind] ?? [1, 1];
+    const map = shared.map.clone();
+    const normalMap = shared.normalMap.clone();
+    const roughnessMap = shared.roughnessMap.clone();
+    for (const texture of [map, normalMap, roughnessMap]) texture.repeat.set(repeatX, repeatY);
+    materials[kind] = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      ...MATERIAL_OPTIONS[kind],
+      map,
+      normalMap,
+      roughnessMap,
+      normalScale: new THREE.Vector2(kind === 'wall' ? 0.38 : 0.22, kind === 'wall' ? 0.38 : 0.22),
+    });
+  }
+  materials.foliage = new THREE.MeshStandardMaterial({ color: 0x2c5a35, roughness: 0.9 });
+  materials.bulb = new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffe6b0, emissiveIntensity: 2 });
+  return materials;
+}
 *** End Patch
