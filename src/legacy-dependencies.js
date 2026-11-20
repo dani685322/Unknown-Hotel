@@ -5,9 +5,26 @@ import Peer from 'peerjs';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import * as LegacyRoomGeneration from './world/legacyRoomGeneration.js';
+import * as EntityTextures from './entities/EntityTextures.js';
+import { installLegacyEntityMethods } from './entities/LegacyEntitySystem.js';
 
 window.THREE = THREE;
 window.Peer = Peer;
 window.EffectComposer = EffectComposer;
 window.RenderPass = RenderPass;
 window.UnrealBloomPass = UnrealBloomPass;
+window.LegacyRoomGeneration = LegacyRoomGeneration;
+window.EntityTextures = EntityTextures;
+
+if (typeof window.DoorsHotelGame === 'function') {
+  installLegacyEntityMethods(window.DoorsHotelGame);
+} else {
+  window.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.DoorsHotelGame === 'function') {
+      installLegacyEntityMethods(window.DoorsHotelGame);
+    } else {
+      console.error('The hotel game class loaded without its entity modules.');
+    }
+  }, { once: true });
+}

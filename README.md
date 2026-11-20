@@ -178,6 +178,14 @@ Do not remove old entries. Keep entries concise and describe what the player can
 
 ## Updates
 
+### 1.0.1.8 - Entity and room generation modules
+
+- Extract entity behavior and procedural entity textures into `src/entities` modules.
+- Extract seeded room plans and encounter selection into `src/world/legacyRoomGeneration.js` and load them from the main `index.html` game.
+- Fix obsolete download and copy button handlers that prevented the game engine from starting.
+- Remove the extracted standalone HTML after integrating its entity and room-generation systems.
+- Validation: production build and syntax checks; browser checks for start, Rush mesh, Rooms 099–100, victory, and both graphics modes; port 5173 HTTP checks.
+
 ### 1.0.1.7 - High-quality bloom lighting
 
 - Add a subtle Unreal bloom pass that brings out practical lamps, entity glows, and guiding lights.
