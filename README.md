@@ -178,6 +178,17 @@ Do not remove old entries. Keep entries concise and describe what the player can
 
 ## Updates
 
+### 1.0.1.6 - Renderer startup, final room, and control room
+
+- Bundle Three.js and PeerJS through Vite so the production page receives the same dependencies as development.
+- Keep the title screen visible and show the startup error if WebGL or room creation fails.
+- Generate Room 100 before declaring the run complete, and space entity encounters using seeded room rolls.
+- Synchronize Screech and Seek triggers in peer sessions and reject invalid remote avatar coordinates.
+- Add room-specific ambient tones and a modeled Rush/Ambush face, and dispose encounter meshes when they leave play.
+- Refresh the admin panel with live run diagnostics and recovery controls; update the setup guide to use port 5173.
+- Guard the standalone room generator when callers request fewer than 50 rooms.
+- Validation: production build and inline-script syntax check.
+
 ### 2026-11-19 - Rush and Ambush encounter logic
 
 - Added red Rush and green Ambush entity skins.

@@ -94,14 +94,16 @@ function makeRoom(rand, index) {
 
 /* ------------------------------------------------------------- run gen */
 export function generateRun(seed, count = ROOM_COUNT) {
+  const requestedCount = Number.isFinite(Number(count)) ? Math.trunc(Number(count)) : ROOM_COUNT;
+  count = Math.max(1, Math.min(ROOM_COUNT, requestedCount));
   const rand = mulberry32(seed);
 
   const rooms = [];
   for (let i = 1; i <= count; i++) rooms.push(makeRoom(rand, i));
 
   // guarantee the boss doors exist exactly once
-  rooms[FIGURE_DOOR - 1].archetype = 'figure_lair';
-  rooms[FINAL_DOOR - 1].archetype  = 'garden';
+  if (rooms[FIGURE_DOOR - 1]) rooms[FIGURE_DOOR - 1].archetype = 'figure_lair';
+  if (rooms[FINAL_DOOR - 1]) rooms[FINAL_DOOR - 1].archetype = 'garden';
 
   return {
     seed,

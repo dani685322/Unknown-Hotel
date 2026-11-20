@@ -6,12 +6,9 @@
     <title>DOORS 3D: The Hotel — HD Multiplayer Edition</title>
     <!-- Tailwind CSS for responsive HUD & Menus -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Local Three.js r128 for 3D WebGL PBR Rendering -->
-    <script src="/node_modules/three/build/three.min.js"></script>
-    <!-- Local PeerJS for serverless WebRTC multiplayer -->
-    <script src="/node_modules/peerjs/dist/peerjs.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script type="module" src="/src/legacy-dependencies.js"></script>
     <style id="doors-custom-styles">
         :root {
             --hotel-gold: #d4af37;
@@ -132,6 +129,32 @@
             overflow: hidden;
             background: linear-gradient(90deg, rgba(5,7,7,.97) 0%, rgba(5,7,7,.82) 48%, rgba(5,7,7,.35) 100%);
             font-family: 'DM Mono', 'JetBrains Mono', monospace;
+        }
+        #game-start-status {
+            min-height: 1.25rem;
+            margin: 14px 0 0;
+            color: #f3b7a9;
+            font: 12px/1.5 'JetBrains Mono', monospace;
+        }
+        #game-start-status[hidden] { display: none; }
+        #admin-panel {
+            width: min(440px, calc(100vw - 24px));
+            border: 1px solid rgba(212,175,55,.52);
+            border-radius: 8px;
+            background: linear-gradient(145deg, rgba(18,16,13,.98), rgba(5,6,7,.97));
+            box-shadow: 0 24px 80px rgba(0,0,0,.65), inset 0 1px rgba(255,255,255,.05);
+            backdrop-filter: blur(14px);
+        }
+        #admin-panel .admin-btn {
+            min-height: 40px;
+            border-radius: 4px;
+            transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+        }
+        #admin-panel .admin-btn:hover { transform: translateY(-1px); border-color: rgba(255,224,150,.8); }
+        .admin-metric {
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.035);
+            padding: 8px 10px;
         }
         .old-menu-screen[hidden],
         .old-menu-screen.hidden,
@@ -579,23 +602,37 @@
     </div>
 
     <!-- ENTITY DIRECTOR / SANDBOX ADMIN PANEL (Toggle with Q) -->
-    <div id="admin-panel" class="fixed top-20 right-4 z-30 w-80 bg-neutral-950/95 border-2 border-amber-500/70 rounded-2xl p-4 shadow-2xl text-amber-100 hidden pointer-events-auto">
-        <div class="flex items-center justify-between pb-2 mb-3 border-b border-amber-800/50">
+    <div id="admin-panel" class="fixed top-5 right-5 z-30 p-4 text-amber-100 hidden pointer-events-auto">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-amber-800/50">
             <div>
-                <h3 class="font-hotel text-sm font-bold text-amber-300 tracking-wider uppercase">Entity Director</h3>
-                <p class="text-[11px] text-amber-200/70">Test monsters, items &amp; boss rooms instantly</p>
+                <p class="font-mono-code text-[9px] tracking-[.28em] text-amber-500">UNKNOWN HOTEL / LIVE TOOLS</p>
+                <h3 class="font-hotel text-xl font-bold text-amber-100 tracking-wide">Control Room</h3>
+                <p class="text-[11px] text-amber-200/65">Encounter testing and run controls</p>
             </div>
-            <button id="close-admin" class="text-amber-400 hover:text-white text-lg font-bold px-2">✕</button>
+            <button id="close-admin" aria-label="Close admin panel" class="border border-amber-700/50 px-3 py-2 text-amber-300 hover:bg-amber-900/40">CLOSE</button>
         </div>
 
-        <div class="space-y-3 text-xs max-h-[70vh] overflow-y-auto pr-1">
+        <div class="grid grid-cols-3 gap-2 mb-4 font-mono-code text-[10px]">
+            <div class="admin-metric"><span class="block text-neutral-500">ROOM</span><b id="admin-room-value">000 / 100</b></div>
+            <div class="admin-metric"><span class="block text-neutral-500">VITALITY</span><b id="admin-hp-value">100 / 100</b></div>
+            <div class="admin-metric"><span class="block text-neutral-500">ENTITY</span><b id="admin-entity-value">CLEAR</b></div>
+        </div>
+        <div class="space-y-4 text-xs max-h-[65vh] overflow-y-auto pr-1">
             <div>
-                <div class="text-[10px] uppercase tracking-wider text-amber-400 font-bold mb-1.5">Spawn Entities (Synced in Co-Op!)</div>
+                <div class="text-[10px] uppercase tracking-[.2em] text-amber-500 font-bold mb-2">Encounter lab</div>
                 <div class="grid grid-cols-2 gap-1.5">
                     <button data-action="spawn-rush" class="admin-btn px-2.5 py-2 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-600/50 text-left font-semibold">💀 Spawn Rush</button>
                     <button data-action="spawn-ambush" class="admin-btn px-2.5 py-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-left font-semibold">🟢 Spawn Ambush</button>
                     <button data-action="spawn-screech" class="admin-btn px-2.5 py-2 rounded-lg bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-left font-semibold">🕷️ Spawn Screech</button>
                     <button data-action="spawn-eyes" class="admin-btn px-2.5 py-2 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-left font-semibold">👁️ Spawn Eyes</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="text-[10px] uppercase tracking-[.2em] text-amber-500 font-bold mb-2">Run utilities</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button data-action="heal" class="admin-btn px-2.5 py-2 bg-sky-950/70 border border-sky-700/50 text-left font-semibold">♥ Restore vitality</button>
+                    <button data-action="clear-entities" class="admin-btn px-2.5 py-2 bg-neutral-900 border border-neutral-600/60 text-left font-semibold">◌ Clear encounters</button>
                 </div>
             </div>
 
@@ -637,7 +674,8 @@
                 <button type="button" class="old-menu-secondary" id="btn-open-coop-start">Multiplayer Beta</button>
             </div>
             <p class="old-menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl or C crouch <span>·</span> E interact <span>·</span> Q admin</p>
-            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> SINGLE PLAYER <span>·</span> LOCAL BETA</p>
+            <p id="game-start-status" role="status" aria-live="polite" hidden></p>
+            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> UPDATE 1.0.1.6 <span>·</span> LOCAL BETA</p>
         </div>
         <div class="old-menu-edge">NO VACANCY — SINCE 1978</div>
     </div>
@@ -709,8 +747,8 @@
                 <div class="font-bold text-amber-300 uppercase tracking-wider text-xs">1. Run Locally in VS Code or GitHub Codespaces</div>
                 <ol class="list-decimal list-inside space-y-1.5 bg-black/50 p-3.5 rounded-xl border border-amber-900/50">
                     <li>Download <code class="text-amber-300 font-mono-code">index.html</code> below and upload it to your GitHub repo or VS Code folder.</li>
-                    <li>In the terminal, run <code class="text-emerald-300 font-mono-code">python3 -m http.server 8000</code> (or click <strong>Go Live</strong> in VS Code).</li>
-                    <li>In Codespaces, open the <strong>Ports</strong> tab, set Port 8000 to <strong>Public</strong>, and open the URL on your phone!</li>
+                    <li>In the project terminal, run <code class="text-emerald-300 font-mono-code">npm run dev</code>. The game is served on port <strong>5173</strong>.</li>
+                    <li>In Codespaces, open the <strong>Ports</strong> tab and open forwarded port <strong>5173</strong> on your phone or computer.</li>
                 </ol>
                 <div class="font-bold text-emerald-300 uppercase tracking-wider text-xs">2. How to Play Co-Op Multiplayer</div>
                 <p class="bg-black/50 p-3.5 rounded-xl border border-emerald-900/50">
@@ -754,6 +792,7 @@
                 this.ctx = null;
                 this.masterGain = null;
                 this.ambientOsc = null;
+                this.ambientGain = null;
             }
 
             init() {
@@ -785,6 +824,21 @@
                 gain.connect(this.masterGain);
                 osc.start();
                 this.ambientOsc = osc;
+                this.ambientGain = gain;
+            }
+
+            setRoomMood(roomType) {
+                if (!this.ctx || !this.ambientOsc || !this.ambientGain) return;
+                const moods = {
+                    dark: [35, 0.052], seek: [51, 0.03], library: [40, 0.028],
+                    courtyard: [54, 0.022], finale: [48, 0.034], standard: [44, 0.035],
+                };
+                const [frequency, volume] = moods[roomType] ?? moods.standard;
+                const now = this.ctx.currentTime;
+                this.ambientOsc.frequency.cancelScheduledValues(now);
+                this.ambientGain.gain.cancelScheduledValues(now);
+                this.ambientOsc.frequency.setTargetAtTime(frequency, now, 0.8);
+                this.ambientGain.gain.setTargetAtTime(volume, now, 0.8);
             }
 
             playFootstep(crouching = false) {
@@ -1755,6 +1809,9 @@
                 });
 
                 conn.on('data', (data) => this.handleMessage(conn.peer, data));
+                conn.on('error', (error) => {
+                    this.setStatus(`⚠️ Peer connection error: ${error?.type || error?.message || 'unknown error'}`);
+                });
 
                 conn.on('close', () => {
                     this.connections.delete(conn.peer);
@@ -1781,6 +1838,7 @@
                 }
 
                 if (msg.type === 'welcome') {
+                    if (!Number.isFinite(Number(msg.sessionSeed)) || !Number.isFinite(Number(msg.currentRoomNum))) return;
                     this.game.sessionSeed = msg.sessionSeed;
                     this.game.startNewRun(msg.sessionSeed, msg.currentRoomNum, msg.originZ);
                     this.game.booksFound = msg.booksFound || 0;
@@ -1792,17 +1850,19 @@
                 } else if (msg.type === 'state') {
                     const pid = msg.id || senderPeerId;
                     if (pid === this.myId) return;
+                    const state = [msg.x, msg.y, msg.z, msg.yaw, msg.hp, msg.roomNum].map(Number);
+                    if (!state.every(Number.isFinite)) return;
                     let avatar = this.remotePlayers.get(pid);
                     if (!avatar) {
                         avatar = this.createRemoteAvatar(pid, msg.name || 'Teammate');
                     }
-                    avatar.targetPos.set(msg.x, msg.y, msg.z);
-                    avatar.targetYaw = msg.yaw;
-                    avatar.hp = msg.hp;
-                    avatar.hiding = msg.hiding;
-                    avatar.crouching = msg.crouching;
-                    avatar.lightOn = msg.lightOn;
-                    avatar.roomNum = msg.roomNum;
+                    avatar.targetPos.set(THREE.MathUtils.clamp(state[0], -2500, 2500), THREE.MathUtils.clamp(state[1], 0, 4), THREE.MathUtils.clamp(state[2], -2500, 2500));
+                    avatar.targetYaw = THREE.MathUtils.clamp(state[3], -Math.PI * 8, Math.PI * 8);
+                    avatar.hp = THREE.MathUtils.clamp(state[4], 0, 100);
+                    avatar.hiding = Boolean(msg.hiding);
+                    avatar.crouching = Boolean(msg.crouching);
+                    avatar.lightOn = Boolean(msg.lightOn);
+                    avatar.roomNum = THREE.MathUtils.clamp(Math.trunc(state[5]), 0, 101);
                     avatar.lastSeen = performance.now();
                     this.updateCoopHUD();
                 } else if (msg.type === 'doorOpened') {
@@ -1813,6 +1873,8 @@
                     if (msg.entityType === 'rush') this.game.spawnRushOrAmbush(false, true);
                     if (msg.entityType === 'ambush') this.game.spawnRushOrAmbush(true, true);
                     if (msg.entityType === 'eyes' && this.game.currentRoomData) this.game.spawnEyes(this.game.currentRoomData, true);
+                    if (msg.entityType === 'screech') this.game.spawnScreech(true);
+                    if (msg.entityType === 'seek' && this.game.currentRoomData?.roomType === 'seek') this.game.spawnSeekChase(this.game.currentRoomData, true);
                 } else if (msg.type === 'bookCollected') {
                     if (msg.booksFound > this.game.booksFound) {
                         this.game.booksFound = msg.booksFound;
@@ -2053,10 +2115,10 @@
 
                 this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
                 this.renderer.setSize(window.innerWidth, window.innerHeight);
-                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
                 this.renderer.outputEncoding = THREE.sRGBEncoding;
                 this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                this.renderer.toneMappingExposure = 1.18;
+                this.renderer.toneMappingExposure = 1.08;
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -2138,6 +2200,7 @@
                 this.eyesEntity = null;
                 this.figureEntity = null;
                 this.seekEntity = null;
+                this.lastEntityRoom = -10;
 
                 this.libraryCode = [];
                 this.booksFound = 0;
@@ -2171,11 +2234,7 @@
                 });
 
                 document.getElementById('btn-gfx-toggle').addEventListener('click', () => {
-                    this.highQuality = !this.highQuality;
-                    this.renderer.shadowMap.enabled = this.highQuality;
-                    this.renderer.setPixelRatio(this.highQuality ? Math.min(window.devicePixelRatio, 2) : 1);
-                    this.dustPoints.visible = this.highQuality;
-                    document.getElementById('btn-gfx-toggle').textContent = this.highQuality ? '✨ HD' : '⚡ Fast';
+                    this.setGraphicsQuality(!this.highQuality);
                     this.showBanner(this.highQuality ? '✨ HD PBR Lighting & Particles Enabled' : '⚡ Fast Performance Mode Enabled');
                 });
 
@@ -2463,6 +2522,7 @@
              *******************************************************************/
             startNewRun(overrideSeed = null, startRoom = 0, startOriginZ = 0) {
                 this.sessionSeed = overrideSeed || (Math.floor(Math.random() * 999999) + 1);
+                this.lastEntityRoom = -10;
                 this.hp = 100;
                 this.gold = 0;
                 this.currentRoomNum = startRoom;
@@ -2594,6 +2654,17 @@
                 document.getElementById('hp-bar').style.width = `${Math.max(0, this.hp)}%`;
                 document.getElementById('gold-count').textContent = this.gold;
                 document.getElementById('room-number-hud').textContent = String(this.currentRoomNum).padStart(3, '0');
+                const adminRoom = document.getElementById('admin-room-value');
+                const adminHp = document.getElementById('admin-hp-value');
+                const adminEntity = document.getElementById('admin-entity-value');
+                if (adminRoom) adminRoom.textContent = `${String(this.currentRoomNum).padStart(3, '0')} / 100`;
+                if (adminHp) adminHp.textContent = `${Math.ceil(this.hp)} / 100`;
+                if (adminEntity) {
+                    const activeEntity = this.rushEntity ? (this.rushEntity.isAmbush ? 'AMBUSH' : 'RUSH')
+                        : this.seekEntity ? 'SEEK' : this.figureEntity ? 'FIGURE'
+                            : this.eyesEntity ? 'EYES' : this.screechEntity ? 'SCREECH' : 'CLEAR';
+                    adminEntity.textContent = activeEntity;
+                }
                 document.getElementById('crouch-badge').classList.toggle('hidden', !this.isCrouching);
                 document.getElementById('speed-badge').classList.toggle('hidden', this.speedBoostTimer <= 0);
 
@@ -2603,6 +2674,17 @@
                         ? 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-600 border-2 border-amber-200 text-black flex flex-col items-center justify-center shadow-xl active:scale-95 transition'
                         : 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-neutral-900/85 border-2 border-amber-600/60 text-amber-200 flex flex-col items-center justify-center shadow-xl active:scale-95 transition';
                 }
+            }
+
+            setGraphicsQuality(enabled) {
+                this.highQuality = Boolean(enabled);
+                this.renderer.shadowMap.enabled = this.highQuality;
+                this.renderer.setPixelRatio(this.highQuality ? Math.min(window.devicePixelRatio || 1, 1.75) : 1);
+                if (this.dustPoints) this.dustPoints.visible = this.highQuality;
+                const hudToggle = document.getElementById('btn-gfx-toggle');
+                const menuToggle = document.getElementById('options-gfx-toggle');
+                if (hudToggle) hudToggle.textContent = this.highQuality ? '✨ HD' : '⚡ Fast';
+                if (menuToggle) menuToggle.textContent = this.highQuality ? 'HD' : 'Fast';
             }
 
             setTouchUIVisible(visible) {
@@ -2990,6 +3072,7 @@
 
                 this.currentRoomData = roomObj;
                 this.interactables = interactables;
+                this.sound.setRoomMood(roomType);
 
                 // Only Solo or Host triggers random entity spawns (and syncs to clients)
                 if (roomNum > 0 && this.multiplayer.mode !== 'client') {
@@ -3234,7 +3317,7 @@
                     });
                 }
 
-                if (this.currentRoomNum >= 100) {
+                if (this.currentRoomNum > 100) {
                     this.triggerVictory();
                     return;
                 }
@@ -3248,7 +3331,7 @@
                 this.sound.playDoorOpen();
                 this.currentRoomNum = newRoomNum;
                 this.updateHUD();
-                if (this.currentRoomNum >= 100) {
+                if (this.currentRoomNum > 100) {
                     this.triggerVictory();
                     return;
                 }
@@ -3259,9 +3342,19 @@
             /*******************************************************************
              * 8. SCULPTED 3D ENTITIES & CO-OP SYNCED AI
              *******************************************************************/
+            disposeEntityMesh(mesh) {
+                if (!mesh) return;
+                mesh.parent?.remove(mesh);
+                mesh.traverse((object) => {
+                    object.geometry?.dispose();
+                    const materials = Array.isArray(object.material) ? object.material : [object.material];
+                    materials.forEach((material) => material?.dispose());
+                });
+            }
+
             clearAllEntities() {
                 [this.rushEntity, this.screechEntity, this.eyesEntity, this.figureEntity, this.seekEntity].forEach(ent => {
-                    if (ent && ent.mesh) this.scene.remove(ent.mesh);
+                    if (ent && ent.mesh) this.disposeEntityMesh(ent.mesh);
                 });
                 this.rushEntity = null; this.screechEntity = null; this.eyesEntity = null; this.figureEntity = null; this.seekEntity = null;
                 document.getElementById('screech-indicator').classList.add('hidden');
@@ -3270,26 +3363,39 @@
 
             evaluateRoomEntitySpawns(roomObj) {
                 if (this.eyesEntity) {
-                    this.scene.remove(this.eyesEntity.mesh);
+                    this.disposeEntityMesh(this.eyesEntity.mesh);
                     this.eyesEntity = null;
                     document.getElementById('vignette-layer').classList.remove('eyes-aura');
                 }
                 if (this.figureEntity && roomObj.roomType !== 'library') {
-                    this.scene.remove(this.figureEntity.mesh);
+                    this.disposeEntityMesh(this.figureEntity.mesh);
                     this.figureEntity = null;
                 }
 
                 if (roomObj.roomType === 'seek') { this.spawnSeekChase(roomObj); return; }
                 if (roomObj.roomType === 'library') return;
 
-                const roll = Math.random();
-                if (roomObj.roomType === 'dark' && Math.random() < 0.65) {
+                const roomRoll = createSeededRng(this.sessionSeed + this.currentRoomNum * 7919 + 0x5f3759df);
+                const roll = roomRoll();
+                if (roomObj.roomType === 'dark' && roomRoll() < 0.65) {
+                    this.lastEntityRoom = this.currentRoomNum;
                     setTimeout(() => { if (this.isAlive && this.currentRoomData === roomObj) this.spawnScreech(); }, 1600);
-                } else if (roll < 0.22 && this.currentRoomNum >= 4) {
-                    this.spawnRushOrAmbush(false);
-                } else if (roll < 0.30 && this.currentRoomNum >= 12) {
+                    return;
+                }
+
+                // Give players recovery rooms between attacks and ramp the danger
+                // gradually as they approach the greenhouse.
+                if (this.currentRoomNum < 4 || this.currentRoomNum - this.lastEntityRoom < 3) return;
+                const danger = Math.min(0.25, 0.09 + this.currentRoomNum * 0.0016);
+                const ambushChance = this.currentRoomNum >= 12 ? Math.min(0.075, 0.015 + this.currentRoomNum * 0.0006) : 0;
+                if (roll < ambushChance) {
+                    this.lastEntityRoom = this.currentRoomNum;
                     this.spawnRushOrAmbush(true);
-                } else if (roll < 0.44 && this.currentRoomNum >= 5) {
+                } else if (roll < ambushChance + danger) {
+                    this.lastEntityRoom = this.currentRoomNum;
+                    this.spawnRushOrAmbush(false);
+                } else if (roll < ambushChance + danger + 0.12 && this.currentRoomNum >= 5) {
+                    this.lastEntityRoom = this.currentRoomNum;
                     this.spawnEyes(roomObj);
                 }
             }
@@ -3317,9 +3423,47 @@
                 this.showBanner(isAmbush ? '🟢 Lights flickered wildly... AMBUSH is rebounding!' : '⚡ The lights flickered... Hide in a Wardrobe [E] NOW!');
 
                 const group = new THREE.Group();
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: isAmbush ? this.ambushTex : this.rushTex, transparent: true }));
-                sprite.scale.set(3.8, 3.8, 1);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: isAmbush ? this.ambushTex : this.rushTex, transparent: true, opacity: 0.28, depthWrite: false }));
+                sprite.scale.set(4.25, 4.25, 1);
                 group.add(sprite);
+
+                // Give the warning silhouette real depth so it reads as a mesh
+                // when its light cuts through the corridor fog.
+                const face = new THREE.Group();
+                const faceMaterial = new THREE.MeshStandardMaterial({
+                    color: isAmbush ? 0x071710 : 0x09090c,
+                    roughness: 0.42,
+                    metalness: 0.12,
+                    emissive: isAmbush ? 0x052318 : 0x180306,
+                    emissiveIntensity: 0.55,
+                });
+                const skull = new THREE.Mesh(new THREE.SphereGeometry(0.68, 20, 16), faceMaterial);
+                skull.scale.set(1, 1.18, 0.72);
+                skull.castShadow = true;
+                face.add(skull);
+                const eyeMaterial = new THREE.MeshBasicMaterial({ color: isAmbush ? 0x6effbd : 0xff3147 });
+                const eyeGeometry = new THREE.SphereGeometry(0.105, 10, 8);
+                for (const side of [-1, 1]) {
+                    const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                    eye.position.set(side * 0.23, 0.13, 0.44);
+                    face.add(eye);
+                }
+                const mouth = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.27, 12, 8),
+                    new THREE.MeshBasicMaterial({ color: 0x010102 })
+                );
+                mouth.scale.set(0.84, 1.15, 0.42);
+                mouth.position.set(0, -0.35, 0.43);
+                face.add(mouth);
+                const toothMaterial = new THREE.MeshStandardMaterial({ color: 0xc7c0ad, roughness: 0.64 });
+                for (const side of [-1, 1]) {
+                    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.17, 5), toothMaterial);
+                    tooth.rotation.x = Math.PI;
+                    tooth.position.set(side * 0.105, -0.25, 0.53);
+                    face.add(tooth);
+                }
+                face.position.y = 0.04;
+                group.add(face);
 
                 const auraGeo = new THREE.BufferGeometry();
                 const pArr = new Float32Array(80 * 3);
@@ -3337,10 +3481,12 @@
                 this.scene.add(group);
 
                 this.rushEntity = { isAmbush, mesh: group, auraPts, startZ, endZ, dir: -1, reboundsLeft: isAmbush ? 3 : 0, speed: isAmbush ? 28 : 21, delayTimer: 2.3 };
+                this.updateHUD();
             }
 
-            spawnScreech() {
+            spawnScreech(fromNetwork = false) {
                 if (this.screechEntity || !this.isAlive) return;
+                if (!fromNetwork) this.multiplayer.broadcast({ type: 'spawnEntity', entityType: 'screech' });
                 this.sound.playScreechPsst();
                 document.getElementById('screech-indicator').classList.remove('hidden');
 
@@ -3351,6 +3497,7 @@
                 this.scene.add(sprite);
 
                 this.screechEntity = { mesh: sprite, timer: 2.8, stareProgress: 0 };
+                this.updateHUD();
             }
 
             spawnEyes(roomObj, fromNetwork = false) {
@@ -3366,6 +3513,7 @@
 
                 this.eyesEntity = { mesh: group, baseY: 2.05 };
                 this.showBanner('👁️ Eyes appeared! Look down at the carpet while passing!');
+                this.updateHUD();
             }
 
             spawnFigure(originVec, length) {
@@ -3406,9 +3554,12 @@
                 group.position.set(0, 0, originVec.z - length * 0.5);
                 this.scene.add(group);
                 this.figureEntity = { mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, patrolTimer: 0, originZ: originVec.z - length * 0.5 };
+                this.updateHUD();
             }
 
-            spawnSeekChase(roomObj) {
+            spawnSeekChase(roomObj, fromNetwork = false) {
+                if (this.seekEntity) return;
+                if (!fromNetwork) this.multiplayer.broadcast({ type: 'spawnEntity', entityType: 'seek' });
                 this.showBanner('🏃 RUN! SEEK IS CHASING YOU! Sprint toward the glowing blue door!');
                 const group = new THREE.Group();
                 const inkMat = new THREE.MeshStandardMaterial({ color: 0x050507, roughness: 0.15, metalness: 0.35 });
@@ -3427,6 +3578,7 @@
                 group.position.set(0, 0, roomObj.origin.z + 4.8);
                 this.scene.add(group);
                 this.seekEntity = { mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, speed: 5.85 };
+                this.updateHUD();
             }
 
             triggerDupeAttack() {
@@ -3445,7 +3597,7 @@
                     const vig = document.getElementById('vignette-layer');
                     vig.classList.add('crucifix-glow');
                     setTimeout(() => vig.classList.remove('crucifix-glow'), 1200);
-                    if (entityMesh) this.scene.remove(entityMesh);
+                    if (entityMesh) this.disposeEntityMesh(entityMesh);
                     this.showBanner(`✝️ CRUCIFIX ACTIVATED! Banished ${entityName}!`);
                     return true;
                 }
@@ -3528,6 +3680,7 @@
                 const panel = document.getElementById('admin-panel');
                 const show = forceState !== undefined ? forceState : panel.classList.contains('hidden');
                 panel.classList.toggle('hidden', !show);
+                if (show) this.updateHUD();
                 if (show && document.pointerLockElement) document.exitPointerLock();
             }
 
@@ -3539,6 +3692,17 @@
                 if (action === 'spawn-ambush') this.spawnRushOrAmbush(true);
                 if (action === 'spawn-screech') this.spawnScreech();
                 if (action === 'spawn-eyes') this.spawnEyes(this.currentRoomData);
+                if (action === 'heal') {
+                    this.hp = 100;
+                    this.updateHUD();
+                    this.showBanner('Vitality restored.');
+                }
+                if (action === 'clear-entities') {
+                    this.clearAllEntities();
+                    this.entityHazard = null;
+                    this.updateHUD();
+                    this.showBanner('Active encounters cleared.');
+                }
 
                 if (action === 'give-crucifix') { this.addItem({ id: 'crucifix', name: 'Crucifix', icon: '✝️', charges: 1, maxCharges: 1 }); this.showBanner('✝️ Received a Crucifix!'); }
                 if (action === 'give-flashlight') { this.addItem({ id: 'flashlight', name: 'Flashlight', icon: '🔦', charges: 100, maxCharges: 100 }); this.showBanner('🔦 Received a Flashlight!'); }
@@ -3790,7 +3954,7 @@
                             if (this.tryCrucifixBanish(name, r.mesh)) { this.rushEntity = null; return; }
                             this.sound.playJumpscareScream();
                             this.triggerJumpscareVisual(r.isAmbush ? 'ambush' : 'rush');
-                            this.scene.remove(r.mesh);
+                            this.disposeEntityMesh(r.mesh);
                             this.rushEntity = null;
                             this.damagePlayer(100, name, r.isAmbush
                                 ? 'Ambush rebounds multiple times! Hop in and out of wardrobes to avoid Hide.'
@@ -3803,7 +3967,7 @@
                                 r.reboundsLeft--; r.dir *= -1;
                                 this.showBanner(`🟢 Ambush is rebounding! (${r.reboundsLeft + 1} pass remaining)`);
                             } else {
-                                this.scene.remove(r.mesh);
+                                this.disposeEntityMesh(r.mesh);
                                 this.rushEntity = null;
                                 this.showBanner('The entity has passed. It is safe to come out.');
                             }
@@ -3819,7 +3983,7 @@
                         s.stareProgress += dt;
                         if (s.stareProgress > 0.24) {
                             this.sound.playDoorOpen();
-                            this.scene.remove(s.mesh); this.screechEntity = null;
+                            this.disposeEntityMesh(s.mesh); this.screechEntity = null;
                             document.getElementById('screech-indicator').classList.add('hidden');
                             this.showBanner('🔦 You stared down Screech and scared it away!');
                         }
@@ -3830,7 +3994,7 @@
                             this.screenShake = 0.25;
                             this.damagePlayer(38, 'Screech', 'When you hear "Psst!" in dark rooms, spin around immediately and stare at Screech.');
                         }
-                        this.scene.remove(s.mesh); this.screechEntity = null;
+                        this.disposeEntityMesh(s.mesh); this.screechEntity = null;
                         document.getElementById('screech-indicator').classList.add('hidden');
                     }
                 }
@@ -3903,17 +4067,43 @@
             const openModal = (id) => document.getElementById(id)?.classList.remove('hidden');
             const closeModal = (id) => document.getElementById(id)?.classList.add('hidden');
 
-            document.getElementById('btn-start-game')?.addEventListener('click', () => {
+            document.getElementById('btn-start-game')?.addEventListener('click', (event) => {
+                const button = event.currentTarget;
+                const status = document.getElementById('game-start-status');
                 if (!window.doorsGame) {
                     console.error('The 3D game engine is still unavailable.');
+                    status.hidden = false;
+                    status.textContent = 'The 3D engine did not finish loading. Check the browser console and refresh.';
                     return;
                 }
-                window.doorsGame.sound.init();
-                document.getElementById('title-modal').classList.add('hidden');
-                document.getElementById('title-modal').setAttribute('aria-hidden', 'true');
-                document.getElementById('hud-layer').classList.remove('hidden');
-                window.doorsGame.startNewRun();
-                try { window.doorsGame.canvas.requestPointerLock?.(); } catch (error) {}
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                button.querySelector('span').textContent = 'Preparing the hotel…';
+                status.hidden = true;
+                try {
+                    window.doorsGame.sound.init();
+                    window.doorsGame.startNewRun();
+                    if (!window.doorsGame.currentRoomData || !window.doorsGame.isAlive) {
+                        throw new Error('The first room did not finish generating.');
+                    }
+                    document.getElementById('title-modal').classList.add('hidden');
+                    document.getElementById('title-modal').setAttribute('aria-hidden', 'true');
+                    document.getElementById('hud-layer').classList.remove('hidden');
+                    const lockRequest = window.doorsGame.canvas.requestPointerLock?.();
+                    lockRequest?.catch?.(() => {});
+                } catch (error) {
+                    console.error('Could not start the hotel:', error);
+                    window.doorsGame.isAlive = false;
+                    document.getElementById('title-modal').classList.remove('hidden');
+                    document.getElementById('title-modal').removeAttribute('aria-hidden');
+                    document.getElementById('hud-layer').classList.add('hidden');
+                    status.hidden = false;
+                    status.textContent = `Could not start the hotel: ${error instanceof Error ? error.message : 'unknown startup error'}`;
+                } finally {
+                    button.disabled = false;
+                    button.removeAttribute('aria-busy');
+                    button.querySelector('span').textContent = 'Enter the hotel';
+                }
             });
             document.getElementById('btn-open-coop-start')?.addEventListener('click', () => {
                 window.doorsGame?.sound?.init();
@@ -3922,7 +4112,7 @@
             document.getElementById('old-menu-options')?.addEventListener('click', () => openModal('options-modal'));
             document.getElementById('close-options-modal')?.addEventListener('click', () => closeModal('options-modal'));
             document.getElementById('options-gfx-toggle')?.addEventListener('click', (event) => {
-                if (window.doorsGame) window.doorsGame.highQuality = !window.doorsGame.highQuality;
+                if (window.doorsGame) window.doorsGame.setGraphicsQuality(!window.doorsGame.highQuality);
                 event.currentTarget.textContent = window.doorsGame?.highQuality === false ? 'Fast' : 'HD';
             });
             document.getElementById('options-fullscreen')?.addEventListener('click', () => {
@@ -3944,10 +4134,11 @@
             } catch (error) {
                 console.error('Unknown Hotel startup failed:', error);
                 document.getElementById('title-modal')?.classList.remove('hidden');
-                const status = document.createElement('p');
-                status.style.cssText = 'position:fixed;z-index:100;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(520px,calc(100vw - 32px));margin:0;padding:12px 16px;border:1px solid #c69b5a;background:#120d09;color:#e8dfd0;font:12px/1.5 monospace;text-align:center';
-                status.textContent = 'The 3D engine could not start. Please refresh; if it continues, enable WebGL or try a different browser.';
-                document.body.appendChild(status);
+                const status = document.getElementById('game-start-status');
+                if (status) {
+                    status.hidden = false;
+                    status.textContent = `The 3D engine could not start: ${error instanceof Error ? error.message : 'WebGL initialization failed'}. Check WebGL support and the browser console.`;
+                }
             }
         };
     </script>
