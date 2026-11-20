@@ -1,3 +1,5 @@
+import { ADMIN_USERNAMES, CHAT_ROLES } from '../Secret Folder/UsernameAdmin.js';
+
 const HISTORY_KEY = 'unknown-hotel-admin-history';
 const MAX_HISTORY = 50;
 const MAX_OUTPUT = 500;
@@ -76,6 +78,16 @@ export class Admin {
       if (!args[0]) return 'Usage: kill <entityId|entityType>';
       const removed = this.entities?.kill(args[0]);
       return removed ? `Removed ${args[0]}` : `No active entity matched ${args[0]}`;
+    });
+    this.register('promote', `promote <username> <role>  roles: ${CHAT_ROLES.join(', ')}`, (args) => {
+      const username = args[0];
+      const requestedRole = args.slice(1).join(' ').toLowerCase();
+      const role = CHAT_ROLES.find((candidate) => candidate.toLowerCase() === requestedRole);
+      if (!username || !requestedRole) return 'Usage: promote <username> <role>';
+      if (username.toLowerCase() === 'hunao') return 'HuNao is the Owner and cannot be promoted.';
+      if (!role) return `Choose a role from: ${CHAT_ROLES.join(', ')}`;
+      const sent = this.game.multiplayer?.ws?.promoteUser(username, role);
+      return sent ? `Promotion request sent for ${username}.` : 'Connect to the party server first.';
     });
     this.register('set', 'set <key> <value>  change a runtime tuning value', (args) => this._setValue(args));
     this.register('lamp', 'toggle the player lamp', () => {
@@ -210,7 +222,8 @@ export class Admin {
   }
 
   _onGlobalKey(event) {
-    if (!this.enabled || this.game.ownerSession?.role !== 'owner') return;
+    const username = this.game.multiplayer?.account?.trim().toLowerCase();
+    if (!this.enabled || !ADMIN_USERNAMES.has(username)) return;
     const shortcut = event.code === 'Backquote' || (event.code === 'Slash' && !this.opened) || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
     if (event.type === 'keydown' && shortcut && !event.repeat) {
       event.preventDefault();
@@ -287,6 +300,7 @@ export class Admin {
       this.game.input.dropPressed = false;
     }
     this.input.blur();
+    if (this.game.state === 'playing') this.game.requestLock?.();
   }
 
   toggle() {

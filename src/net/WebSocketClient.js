@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState }) {
+  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -16,6 +16,7 @@ export class WebSocketClient {
     this.onPartyJoined = onPartyJoined;
     this.onPartyStarted = onPartyStarted;
     this.onRoomState = onRoomState;
+    this.onRoleUpdated = onRoleUpdated;
     this.socket = null;
   }
 
@@ -49,6 +50,7 @@ export class WebSocketClient {
       }
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
+      if (message.type === 'role_updated') this.onRoleUpdated?.(message);
       if (message.type === 'player_state') this.onPlayerState?.(message);
       if (message.type === 'room_state') this.onRoomState?.(message);
       if (message.type === 'party_left') this.onPartyLeft?.();
@@ -60,7 +62,9 @@ export class WebSocketClient {
   send(message) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
+      return true;
     }
+    return false;
   }
 
   createParty(name, visibility, difficulty) {
@@ -77,6 +81,10 @@ export class WebSocketClient {
 
   makeLeader(username) {
     this.send({ type: 'make_leader', username });
+  }
+
+  promoteUser(username, role) {
+    return this.send({ type: 'promote_user', username, role });
   }
 
   kickMember(username) {

@@ -3,6 +3,7 @@ export class PartyChat {
     this.game = game;
     this.opened = false;
     this.messages = [];
+    this.roles = new Map();
     this.root = document.createElement('section');
     this.root.className = 'party-chat';
     this.root.hidden = true;
@@ -41,13 +42,17 @@ export class PartyChat {
   open() {
     this.opened = true;
     this.root.hidden = false;
+    if (document.pointerLockElement) document.exitPointerLock();
     this.input.focus();
   }
 
   close() {
+    if (!this.opened) return;
     this.opened = false;
     this.root.hidden = true;
     this.input.blur();
+    this.input.value = '';
+    if (this.game.state === 'playing') this.game.requestLock?.();
   }
 
   send() {
@@ -60,6 +65,7 @@ export class PartyChat {
     }
     socket.sendChat(text);
     this.input.value = '';
+    this.close();
   }
 
   receive(message) {
@@ -67,15 +73,36 @@ export class PartyChat {
       .replace(/\b(faggot|nigger|kike|chink|spic|tranny|whore)\b/gi, (word) => '*'.repeat(word.length))
       .replace(/https?:\/\/\S+/gi, '[link removed]')
       .slice(0, 500);
-    message = { ...message, text: safeText };
+    const username = String(message.username ?? 'System');
+    const role = message.role || this.roles.get(username.toLowerCase()) || '';
+    if (role) this.roles.set(username.toLowerCase(), role);
+    message = { ...message, username, role, text: safeText };
     this.messages.push(message);
     this.messages = this.messages.slice(-100);
-    const line = document.createElement('div');
-    line.innerHTML = `<b></b><span></span>`;
-    line.querySelector('b').textContent = `${message.username}:`;
-    line.querySelector('span').textContent = message.text;
-    this.output.append(line);
+    this.renderMessage(message);
     while (this.output.childElementCount > 100) this.output.firstElementChild.remove();
+    this.output.scrollTop = this.output.scrollHeight;
+  }
+
+  renderMessage(message) {
+    const line = document.createElement('div');
+    const name = document.createElement('b');
+    const text = document.createElement('span');
+    name.textContent = `${message.username}${message.role ? ` (${message.role})` : ''}:`;
+    text.textContent = message.text;
+    line.append(name, text);
+    this.output.append(line);
+  }
+
+  updateRole({ username, role }) {
+    if (!username || !role) return;
+    const normalizedUsername = username.toLowerCase();
+    this.roles.set(normalizedUsername, role);
+    this.messages = this.messages.map((message) => message.username.toLowerCase() === normalizedUsername
+      ? { ...message, role }
+      : message);
+    this.output.replaceChildren();
+    this.messages.forEach((message) => this.renderMessage(message));
     this.output.scrollTop = this.output.scrollHeight;
   }
 

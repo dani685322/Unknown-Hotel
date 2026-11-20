@@ -1,10 +1,13 @@
 import { WebSocketClient } from '../net/WebSocketClient.js';
+import { saveAccountData } from '../data/savedata.js';
+import { recognizeSavedAccount, rememberAccountForDevice } from '../data/ipadressrecognize.js';
 
 const ACCOUNT_KEY = 'unknown-hotel.playerspassword.txt';
+const SESSION_ACCOUNT_KEY = 'unknown-hotel.signed-in-account';
 const SERVER_KEY = 'unknown-hotel.websocket-url';
 
 export class MultiplayerMenu {
-  constructor({ onClose, onSession, onChat, onPartyStarted, onPartyLeft, onPlayerState, onRoomState }) {
+  constructor({ onClose, onSession, onChat, onPartyStarted, onPartyLeft, onPlayerState, onRoomState, onRoleUpdate }) {
     this.onClose = onClose;
     this.onSession = onSession;
     this.onChat = onChat;
@@ -12,16 +15,19 @@ export class MultiplayerMenu {
     this.onPartyLeft = onPartyLeft;
     this.onPlayerState = onPlayerState;
     this.onRoomState = onRoomState;
+    this.onRoleUpdate = onRoleUpdate;
     this.root = document.createElement('section');
     this.root.className = 'multiplayer-screen';
     this.root.hidden = true;
     document.body.append(this.root);
-    this.account = null;
+    this.account = sessionStorage.getItem(SESSION_ACCOUNT_KEY)
+      ?? recognizeSavedAccount();
     this.ws = null;
     this.players = [];
     this.session = null;
     this.party = null;
     this.publicParties = [];
+    this.pendingPartyCode = null;
     this.renderAuth();
   }
 
@@ -113,7 +119,10 @@ export class MultiplayerMenu {
         return;
       }
       this.account = result.username;
-      this.session = { token: result.token, role: result.role };
+      this.session = { token: result.token, role: result.role, username: result.username };
+      sessionStorage.setItem(SESSION_ACCOUNT_KEY, result.username);
+      saveAccountData(result.username);
+      rememberAccountForDevice(result.username);
       const socketUrl = server === location.origin
         ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`
         : `${server.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')}/ws`;
@@ -184,7 +193,15 @@ export class MultiplayerMenu {
       url,
       username: this.account,
       token: this.session?.token,
-      onOpen: () => this.setLobbyStatus('Connected', 'ok'),
+      onOpen: () => {
+        this.setLobbyStatus('Connected', 'ok');
+        if (this.pendingPartyCode) {
+          const code = this.pendingPartyCode;
+          this.pendingPartyCode = null;
+          this.setLobbyStatus(`Joining party ${code}...`, 'pending');
+          this.ws.joinParty(code);
+        }
+      },
       onClose: () => this.setLobbyStatus('Disconnected', 'error'),
       onError: (message) => this.setLobbyStatus(message, 'error'),
       onMessage: (message) => this.onChat?.(message),
@@ -220,6 +237,7 @@ export class MultiplayerMenu {
         this.onPartyStarted?.(party);
       },
       onRoomState: (state) => this.onRoomState?.(state),
+      onRoleUpdated: (update) => this.onRoleUpdate?.(update),
     });
     this.ws.connect();
   }
@@ -242,7 +260,8 @@ export class MultiplayerMenu {
       return;
     }
     if (!this.ws?.socket || this.ws.socket.readyState !== WebSocket.OPEN) {
-      this.setLobbyStatus('Connecting before joining. Try again in a moment.', 'pending');
+      this.pendingPartyCode = code;
+      this.setLobbyStatus('Connecting before joining...', 'pending');
       this.connectLobby();
       return;
     }

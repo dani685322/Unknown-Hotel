@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "colyseus.js": "^0.15.0",
-    "three": "^0.160.0",
+    "peerjs": "^1.5.4",
+    "three": "^0.128.0",
     "ws": "^8.23.0"
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ import { PartyChat } from '../ui/PartyChat.js';
 import { Admin } from '../Admin.js';
 import { EntityManager } from '../entities/EntityManager.js';
 import { DIFFICULTY, DIFFICULTY_TIERS, ENTITY_SPAWN, HEALTH, NOISE, SPEED, STAMINA } from '../data/balance.js';
+import { saveRunData, clearRunData } from '../data/savedata.js';
 
 export class Run {
   constructor({ scene, renderer, input, player, camera, hud, prompt, reticle }) {
@@ -38,6 +39,7 @@ export class Run {
       onStart: () => { this.start(); this.requestLock(); },
       onResume: () => this.requestLock(),
       onRestart: () => { this.start(); this.requestLock(); },
+      onAbandon: () => this.abandonRun(),
       onOptions: () => {
         this.menu.setMode('hidden');
         this.options.open();
@@ -62,7 +64,10 @@ export class Run {
     this.partyChat = new PartyChat({ game: this });
     this.multiplayer = new MultiplayerMenu({
       onClose: () => this.menu.setMode('title'),
-      onSession: (session) => { this.ownerSession = session; },
+      onSession: (session) => {
+        this.ownerSession = session;
+        this.menu.setAccount(session?.username);
+      },
       onChat: (message) => this.partyChat.receive(message),
       onPartyStarted: (party) => this.startPartyMatch(party),
       onPartyLeft: () => {
@@ -71,6 +76,12 @@ export class Run {
       },
       onPlayerState: (state) => this.updateRemotePlayer(state),
       onRoomState: (state) => this.syncPartyRoom(state),
+      onRoleUpdate: (update) => {
+        this.partyChat.updateRole(update);
+        if (update.promotedBy?.toLowerCase() === this.multiplayer?.account?.toLowerCase()) {
+          this.admin?.write(`${update.username} is now ${update.role}.`, 'result');
+        }
+      },
     });
     this.state = 'title';
     this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
@@ -81,15 +92,39 @@ export class Run {
     this.admin = new Admin({ game: this, scene, player, entities: this.entities });
 
     if (this.state === 'title') {
-      this.menu.setMode('hidden');
-      this.multiplayer.open();
+      this.menu.setMode('title');
+      this.multiplayer.close();
     }
+
+    this._abandonHandler = (event) => {
+      if (event.code === 'Digit0' && !event.repeat && this.state === 'playing') {
+        event.preventDefault();
+        this.abandonRun();
+      }
+    };
+    document.addEventListener('keydown', this._abandonHandler);
 
     document.addEventListener('pointerlockchange', () => {
       if (this.state === 'playing' && !this.admin.opened && this.input.locked) {
         this.menu.setMode('hidden');
       }
     });
+  }
+
+  abandonRun() {
+    if (!window.confirm('Abandon this run and return to the title screen?')) return;
+    if (this.partyStarted) this.multiplayer.ws?.leaveParty();
+    document.exitPointerLock();
+    this.partyStarted = false;
+    this.entityHazard = null;
+    this.state = 'title';
+    this.activeLocker = null;
+    this.clearRoom();
+    clearRunData();
+    this.inventory = { keys: 0, coins: 0, slots: [null, null, null, null, null] };
+    this.input.clearOneShots();
+    Object.assign(this.input.keys, { forward: false, back: false, left: false, right: false });
+    this.menu.setMode('title');
   }
 
   requestLock() {
@@ -264,6 +299,7 @@ export class Run {
     this.player.velocity.set(0, 0, 0);
     this.addRoomItems();
     if (index > 0) this.rollPartySpawns(index);
+    saveRunData({ roomIndex: index, roomLabel: this.room?.desc?.label ?? null });
     if (syncParty && this.partyStarted && this.multiplayer.ws) {
       this.multiplayer.ws.sendRoomState(index);
     }
@@ -466,9 +502,13 @@ export class Run {
       const door = this.target.object;
       if (door.lock.type === 'code' && door.isLocked) {
         const code = window.prompt('Enter the service code shown on the wall plaque');
-        if (code === null) return;
+        if (code === null) {
+          if (this.state === 'playing') queueMicrotask(() => this.requestLock());
+          return;
+        }
         const result = door.tryCode(code);
         this.setMessage(result.message);
+        if (this.state === 'playing') queueMicrotask(() => this.requestLock());
         if (result.ok) doorCreak();
         return;
       }
@@ -530,9 +570,25 @@ export class Run {
     }
     if (this.target.type === 'sideDoor') {
       const sideDoor = this.target.object;
-      sideDoor.userData.open = !sideDoor.userData.open;
-      sideDoor.rotation.y = sideDoor.userData.open ? 1.1 : (sideDoor.position.z % 1 < 0 ? -0.18 : 0.18);
-      this.setMessage(sideDoor.userData.open ? 'Side-room door opened' : 'Side-room door closed');
+      if (sideDoor.userData.unlocked) {
+        this.setMessage('Side-room passage is already open');
+        return;
+      }
+      const challenge = this._sideRoomChallenge(sideDoor);
+      if (!challenge.ok) {
+        this.setMessage(challenge.message);
+        if (this.state === 'playing') queueMicrotask(() => this.requestLock());
+        return;
+      }
+      sideDoor.userData.unlocked = true;
+      sideDoor.userData.open = true;
+      sideDoor.rotation.y = 1.1;
+      const partyRoomIndex = this.partyStarted
+        ? Math.max(0, Math.min(this.run.count - 1, Number(this.multiplayer.party?.roomIndex) || this.roomIndex))
+        : Math.min(this.run.count - 1, this.roomIndex + 1);
+      this.enterRoom(partyRoomIndex, false);
+      this.setMessage(`Challenges passed  /  ${this.run.rooms[partyRoomIndex].label}`, 3000);
+      if (this.state === 'playing') queueMicrotask(() => this.requestLock());
       return;
     }
 
@@ -548,6 +604,33 @@ export class Run {
     }
     this.room.group.remove(this.target.object);
     this.room.pickups = this.room.pickups.filter((pickup) => pickup !== this.target.object);
+  }
+
+  _sideRoomChallenge(sideDoor) {
+    const challenges = [
+      () => {
+        const answer = window.prompt('Side-room challenge 1/3 — Enter the correct sum: 7 + 8');
+        return answer !== null && String(answer).trim() === '15';
+      },
+      () => {
+        const answer = window.prompt('Side-room challenge 2/3 — Spell the hotel: H O T E L');
+        return answer !== null && String(answer).trim().toUpperCase() === 'HOTEL';
+      },
+      () => {
+        const answer = window.prompt('Side-room challenge 3/3 — Enter: OPEN');
+        return answer !== null && String(answer).trim().toUpperCase() === 'OPEN';
+      },
+    ];
+    sideDoor.userData.challengeIndex = Number(sideDoor.userData.challengeIndex) || 0;
+    while (sideDoor.userData.challengeIndex < challenges.length) {
+      const index = sideDoor.userData.challengeIndex;
+      if (!challenges[index]()) {
+        sideDoor.userData.challengeIndex = 0;
+        return { ok: false, message: `Challenge ${index + 1} failed  /  Start again` };
+      }
+      sideDoor.userData.challengeIndex += 1;
+    }
+    return { ok: true, message: 'All side-room challenges passed' };
   }
 
   setMessage(text, duration = 2200) {
@@ -648,7 +731,7 @@ export class Run {
     const status = performance.now() < this.messageUntil ? this.message : '';
     const stamina = Math.round(this.player.stamina);
     const slots = this.inventory.slots.map((item, index) => `<span class="hotbar-slot ${index === this.input.selectedSlot ? 'active' : ''}"><b>${index + 1}</b>${item ? item.toUpperCase() : 'EMPTY'}</span>`).join('');
-    this.hud.innerHTML = `<div class="hud-top"><span>UNKNOWN HOTEL</span><span>${this.room?.desc.label ?? 'ROOM 001'} / 100</span></div><div class="hud-vitals"><span>HEALTH <b>${this.player.health}</b><i><em style="width:${this.player.health}%"></em></i></span><span>STAMINA <b>${stamina}</b><i><em style="width:${stamina}%"></em></i></span><span>KEYS <b>${this.inventory.keys}</b></span><span>COINS <b>${this.inventory.coins}</b></span></div><div class="hud-state">${this.player.state.toUpperCase()}${status ? `  /  ${status}` : ''}</div><div class="hotbar">${slots}</div>`;
+    this.hud.innerHTML = `<div class="hud-top"><span class="hud-brand">UNKNOWN HOTEL</span><span class="hud-door"><small>DOOR</small>${String(this.roomIndex + 1).padStart(3, '0')}</span></div><div class="hud-vitals"><span>VITALITY <b>${this.player.health}</b><i><em style="width:${this.player.health}%"></em></i></span><span>STAMINA <b>${stamina}</b><i><em style="width:${stamina}%"></em></i></span><span>KEYS <b>${this.inventory.keys}</b></span><span>COINS <b>${this.inventory.coins}</b></span></div><div class="hud-state"><span>${this.player.state.toUpperCase()}</span>${status ? `<b>${status}</b>` : ''}</div><div class="hotbar"><span class="hotbar-label">LOADOUT</span>${slots}</div>`;
     this.prompt.textContent = targetText;
     this.reticle.classList.toggle('active', Boolean(this.target));
   }

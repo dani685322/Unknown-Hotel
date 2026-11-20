@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocketServer, WebSocket } from 'ws';
+import { ADMIN_USERNAMES, CHAT_ROLES } from '../Secret Folder/UsernameAdmin.js';
 
 const host = process.env.SERVER_HOST ?? '0.0.0.0';
 const port = Number(process.env.SERVER_PORT ?? 8080);
@@ -18,6 +19,13 @@ database.exec(`
     password_salt TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user'
+  );
+  CREATE TABLE IF NOT EXISTS account_addresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    ip_address TEXT NOT NULL,
+    recognized_at INTEGER NOT NULL,
+    UNIQUE(username, ip_address)
   );
 `);
 
@@ -144,6 +152,26 @@ function broadcastChat(socket, message) {
   if (socket.partyCode) sendParty(socket.partyCode, message);
 }
 
+function requestIp(request) {
+  const forwarded = String(request.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+  return forwarded || request.socket.remoteAddress || 'unknown';
+}
+
+function rememberAccountAddress(username, ipAddress) {
+  database.prepare(`
+    INSERT INTO account_addresses (username, ip_address, recognized_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(username, ip_address) DO UPDATE SET recognized_at = excluded.recognized_at
+  `).run(username, ipAddress, Date.now());
+}
+
+function chatRole(username) {
+  if (username.toLowerCase() === 'hunao') return 'Owner';
+  const user = database.prepare('SELECT role FROM users WHERE lower(username) = lower(?)').get(username);
+  if (user?.role === 'owner') return 'Owner';
+  return CHAT_ROLES.includes(user?.role) ? user.role : '';
+}
+
 const httpServer = http.createServer(async (request, response) => {
   if (request.method === 'OPTIONS') return sendJson(response, 204, {});
 
@@ -169,6 +197,7 @@ const httpServer = http.createServer(async (request, response) => {
         .run(cleanName, salt, hashPassword(password, salt), 'user');
       const token = crypto.randomBytes(32).toString('base64url');
       sessions.set(token, { username: cleanName, role: 'user' });
+      rememberAccountAddress(cleanName, requestIp(request));
       return sendJson(response, 201, { token, username: cleanName, role: 'user' });
     } catch (error) {
       return sendJson(response, 400, { error: error.message });
@@ -189,6 +218,7 @@ const httpServer = http.createServer(async (request, response) => {
       }
       const token = crypto.randomBytes(32).toString('base64url');
       sessions.set(token, { username: user.username, role: user.role });
+      rememberAccountAddress(user.username, requestIp(request));
       return sendJson(response, 200, { token, username: user.username, role: user.role });
     } catch (error) {
       return sendJson(response, 400, { error: error.message });
@@ -226,7 +256,7 @@ websocketServer.on('connection', (socket) => {
         return;
       }
       socket.user = session.username;
-      socket.send(JSON.stringify({ type: 'joined', username: socket.user, role: session.role }));
+      socket.send(JSON.stringify({ type: 'joined', username: socket.user, role: chatRole(socket.user) }));
       socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
       broadcastPlayers();
     }
@@ -415,6 +445,38 @@ websocketServer.on('connection', (socket) => {
       broadcastParty(party.code);
     }
 
+    if (message.type === 'promote_user') {
+      if (!socket.user || !ADMIN_USERNAMES.has(socket.user.toLowerCase())) {
+        socket.send(JSON.stringify({ type: 'error', message: 'You are not allowed to promote players.' }));
+        return;
+      }
+      const username = String(message.username ?? '').trim();
+      const role = String(message.role ?? '');
+      if (!username || !CHAT_ROLES.includes(role) || username.toLowerCase() === 'hunao') {
+        socket.send(JSON.stringify({ type: 'error', message: 'Choose a valid username and role. Owner is reserved for HuNao.' }));
+        return;
+      }
+      const target = database.prepare('SELECT username, role FROM users WHERE lower(username) = lower(?)').get(username);
+      if (!target || target.role === 'owner') {
+        socket.send(JSON.stringify({ type: 'error', message: 'Account not found or its Owner role cannot be changed.' }));
+        return;
+      }
+      database.prepare('UPDATE users SET role = ? WHERE lower(username) = lower(?)').run(role, target.username);
+      for (const session of sessions.values()) {
+        if (session.username.toLowerCase() === target.username.toLowerCase()) session.role = role;
+      }
+      const update = JSON.stringify({
+        type: 'role_updated',
+        username: target.username,
+        role,
+        promotedBy: socket.user,
+      });
+      for (const client of sockets) {
+        if (client.readyState === WebSocket.OPEN) client.send(update);
+      }
+      return;
+    }
+
     if (message.type === 'list_public_parties') {
       socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
     }
@@ -427,6 +489,7 @@ websocketServer.on('connection', (socket) => {
       broadcastChat(socket, {
         type: 'chat',
         username: socket.user,
+        role: chatRole(socket.user),
         text,
         sentAt: Date.now(),
       });

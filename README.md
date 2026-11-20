@@ -27,7 +27,7 @@ A procedural horror-survival game built with Three.js and an authoritative Node.
 | `T` or `Enter` | Open party chat |
 | `Escape` | Close party chat or Admin |
 | `Space` | Drop item |
-| `/` | Open the owner Admin terminal |
+| `/` | Open the owner Admin terminal (If Admin) |
 
 ## Multiplayer
 
