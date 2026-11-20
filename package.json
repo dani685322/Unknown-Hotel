@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "colyseus.js": "^0.15.0",
+    "openai": "^7.62.0",
     "peerjs": "^1.5.4",
     "three": "^0.128.0",
     "ws": "^8.23.0"
