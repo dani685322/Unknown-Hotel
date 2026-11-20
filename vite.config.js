@@ -17,6 +17,8 @@ export default defineConfig({
     },
   },
   build: {
+    // Three.js and its post-processing shaders fit within the agreed 1 MiB budget.
+    chunkSizeWarningLimit: 1024,
     rollupOptions: {
       output: {
         manualChunks(id) {

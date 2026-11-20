@@ -178,6 +178,13 @@ Do not remove old entries. Keep entries concise and describe what the player can
 
 ## Updates
 
+### 1.0.1.7 - High-quality bloom lighting
+
+- Add a subtle Unreal bloom pass that brings out practical lamps, entity glows, and guiding lights.
+- Keep post-processing in HD mode and fall back to direct rendering if the GPU or browser cannot run the effect.
+- Raise the Vite chunk warning budget to 1 MiB for the Three.js post-processing build.
+- Validation: production build, JavaScript syntax checks, room-generation smoke check, and port 5173 HTTP checks.
+
 ### 1.0.1.6 - Renderer startup, final room, and control room
 
 - Bundle Three.js and PeerJS through Vite so the production page receives the same dependencies as development.

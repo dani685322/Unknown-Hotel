@@ -675,7 +675,7 @@
             </div>
             <p class="old-menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl or C crouch <span>·</span> E interact <span>·</span> Q admin</p>
             <p id="game-start-status" role="status" aria-live="polite" hidden></p>
-            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> UPDATE 1.0.1.6 <span>·</span> LOCAL BETA</p>
+            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> UPDATE 1.0.1.7 <span>·</span> LOCAL BETA</p>
         </div>
         <div class="old-menu-edge">NO VACANCY — SINCE 1978</div>
     </div>
@@ -2122,6 +2122,25 @@
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+                this.composer = null;
+                this.bloomPass = null;
+                try {
+                    this.composer = new EffectComposer(this.renderer);
+                    this.composer.addPass(new RenderPass(this.scene, this.camera));
+                    this.bloomPass = new UnrealBloomPass(
+                        new THREE.Vector2(window.innerWidth, window.innerHeight),
+                        0.22,
+                        0.62,
+                        0.88,
+                    );
+                    this.composer.addPass(this.bloomPass);
+                } catch (error) {
+                    console.warn('Bloom post-processing is unavailable; using direct rendering.', error);
+                    this.composer?.dispose();
+                    this.composer = null;
+                    this.bloomPass = null;
+                }
+
                 this.viewmodel = new ViewmodelController(this.camera);
                 this.multiplayer = new MultiplayerManager(this);
 
@@ -2231,11 +2250,12 @@
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
+                    this.composer?.setSize(window.innerWidth, window.innerHeight);
                 });
 
                 document.getElementById('btn-gfx-toggle').addEventListener('click', () => {
                     this.setGraphicsQuality(!this.highQuality);
-                    this.showBanner(this.highQuality ? '✨ HD PBR Lighting & Particles Enabled' : '⚡ Fast Performance Mode Enabled');
+                    this.showBanner(this.highQuality ? '✨ HD lighting, bloom & particles enabled' : '⚡ Fast Performance Mode Enabled');
                 });
 
                 // Desktop Pointer Lock + Mouse Drag Look
@@ -2679,7 +2699,10 @@
             setGraphicsQuality(enabled) {
                 this.highQuality = Boolean(enabled);
                 this.renderer.shadowMap.enabled = this.highQuality;
-                this.renderer.setPixelRatio(this.highQuality ? Math.min(window.devicePixelRatio || 1, 1.75) : 1);
+                const pixelRatio = this.highQuality ? Math.min(window.devicePixelRatio || 1, 1.75) : 1;
+                this.renderer.setPixelRatio(pixelRatio);
+                this.composer?.setPixelRatio(pixelRatio);
+                if (this.bloomPass) this.bloomPass.strength = this.highQuality ? 0.22 : 0;
                 if (this.dustPoints) this.dustPoints.visible = this.highQuality;
                 const hudToggle = document.getElementById('btn-gfx-toggle');
                 const menuToggle = document.getElementById('options-gfx-toggle');
@@ -3810,7 +3833,7 @@
                 const elapsed = this.clock.elapsedTime;
 
                 if (!this.isAlive || !this.currentRoomData) {
-                    this.renderer.render(this.scene, this.camera);
+                    this.renderFrame();
                     return;
                 }
 
@@ -3934,6 +3957,21 @@
                 // Update Co-Op Multiplayer Avatars & Entities
                 this.multiplayer.update(dt, elapsed);
                 this.updateEntities(dt, elapsed, lookDir);
+                this.renderFrame();
+            }
+
+            renderFrame() {
+                if (this.highQuality && this.composer) {
+                    try {
+                        this.composer.render();
+                        return;
+                    } catch (error) {
+                        console.warn('Bloom rendering failed; switching to direct rendering.', error);
+                        this.composer.dispose();
+                        this.composer = null;
+                        this.bloomPass = null;
+                    }
+                }
                 this.renderer.render(this.scene, this.camera);
             }
 
