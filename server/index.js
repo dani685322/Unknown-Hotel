@@ -62,7 +62,7 @@ function makePartyCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
   do {
-    code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join('');
   } while (parties.has(code));
   return code;
 }
@@ -236,10 +236,30 @@ const httpServer = http.createServer(async (request, response) => {
   sendJson(response, 404, { error: 'Not found' });
 });
 
-const websocketServer = new WebSocketServer({ server: httpServer });
+const websocketServer = new WebSocketServer({ server: httpServer, maxPayload: 32_768, perMessageDeflate: false });
+const heartbeat = setInterval(() => {
+  for (const socket of sockets) {
+    if (socket.readyState !== WebSocket.OPEN) continue;
+    if (socket.isAlive === false) {
+      socket.terminate();
+      continue;
+    }
+    socket.isAlive = false;
+    socket.ping();
+  }
+}, 30_000);
+heartbeat.unref();
+websocketServer.on('close', () => clearInterval(heartbeat));
+
 websocketServer.on('connection', (socket) => {
+  socket.isAlive = true;
+  socket.on('pong', () => { socket.isAlive = true; });
   sockets.add(socket);
   socket.on('message', (raw) => {
+    if (raw.length > 32_768) {
+      socket.close(1009, 'Message too large.');
+      return;
+    }
     let message;
     try {
       message = JSON.parse(raw.toString());
@@ -247,8 +267,16 @@ websocketServer.on('connection', (socket) => {
       socket.send(JSON.stringify({ type: 'error', message: 'Invalid JSON.' }));
       return;
     }
+    if (!message || typeof message !== 'object' || Array.isArray(message) || typeof message.type !== 'string') {
+      socket.send(JSON.stringify({ type: 'error', message: 'Invalid message format.' }));
+      return;
+    }
 
     if (message.type === 'join') {
+      if (socket.user) {
+        socket.send(JSON.stringify({ type: 'error', message: 'This connection is already authenticated.' }));
+        return;
+      }
       const session = sessions.get(message.token);
       if (!session) {
         socket.send(JSON.stringify({ type: 'error', message: 'Authentication required.' }));
@@ -280,6 +308,10 @@ websocketServer.on('connection', (socket) => {
 
     if (message.type === 'join_party') {
       if (!socket.user) return;
+      if (socket.partyCode) {
+        socket.send(JSON.stringify({ type: 'error', message: 'Leave your current party first.' }));
+        return;
+      }
       const code = String(message.code ?? '').trim().toUpperCase();
       const party = parties.get(code);
       if (!party) {
@@ -370,7 +402,7 @@ websocketServer.on('connection', (socket) => {
         return;
       }
       party.started = true;
-      party.runSeed = (Math.floor(Math.random() * 0xffffffff) >>> 0);
+      party.runSeed = crypto.randomInt(0x1_0000_0000);
       party.roomIndex = 0;
       const startedParty = {
         type: 'party_started',
@@ -394,7 +426,12 @@ websocketServer.on('connection', (socket) => {
       if (!socket.partyCode) return;
       const party = parties.get(socket.partyCode);
       if (!party?.started || party.leader !== socket.user) return;
-      const roomIndex = Math.max(0, Math.min(100, Number(message.roomIndex) || 0));
+      const requestedRoom = Number(message.roomIndex);
+      if (!Number.isInteger(requestedRoom)) {
+        socket.send(JSON.stringify({ type: 'error', message: 'Room index must be an integer.' }));
+        return;
+      }
+      const roomIndex = Math.max(0, Math.min(100, requestedRoom));
       party.roomIndex = roomIndex;
       sendParty(party.code, {
         type: 'room_state',
@@ -408,13 +445,15 @@ websocketServer.on('connection', (socket) => {
       if (!socket.partyCode) return;
       const party = parties.get(socket.partyCode);
       if (!party?.started) return;
+      const coordinates = [message.x, message.y, message.z, message.yaw].map(Number);
+      if (!coordinates.every(Number.isFinite)) return;
       sendParty(socket.partyCode, {
         type: 'player_state',
         username: socket.user,
-        x: Number(message.x) || 0,
-        y: Number(message.y) || 0,
-        z: Number(message.z) || 0,
-        yaw: Number(message.yaw) || 0,
+        x: Math.max(-2500, Math.min(2500, coordinates[0])),
+        y: Math.max(0, Math.min(4, coordinates[1])),
+        z: Math.max(-2500, Math.min(2500, coordinates[2])),
+        yaw: Math.max(-Math.PI * 8, Math.min(Math.PI * 8, coordinates[3])),
         moving: Boolean(message.moving),
         crouching: Boolean(message.crouching),
       });

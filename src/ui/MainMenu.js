@@ -1,3 +1,5 @@
+import { escapeHtml } from '../core/escapeHtml.js';
+
 export class MainMenu {
 	constructor({ onStart, onResume, onRestart, onAbandon, onOptions, onMultiplayer }) {
 		this.onStart = onStart;
@@ -57,7 +59,7 @@ export class MainMenu {
 		};
 		const screen = screens[mode] ?? screens.title;
 		const accountLabel = this.account
-			? `<span>${this.account}</span><button type="button" data-action="account">Account</button>`
+			? `<span>${escapeHtml(this.account)}</span><button type="button" data-action="account">Account</button>`
 			: '<button type="button" data-action="account">Login / Sign Up</button>';
 		this.root.innerHTML = `<div class="menu-account">${accountLabel}</div><div class="menu-panel"><div class="menu-mark" aria-hidden="true"><span></span><span></span><span></span></div><p class="menu-eyebrow">${screen.eyebrow}</p><h1>${screen.title}</h1><p class="menu-copy">${screen.copy}</p><button class="menu-primary" data-action="primary">${screen.action}<span aria-hidden="true">↗</span></button><div class="menu-secondary-wrap">${screen.secondary}</div><p class="menu-version">UNKNOWN HOTEL <span>·</span> <span>SINGLE PLAYER</span> <span>·</span> <span>LOCAL BETA</span></p></div><div class="menu-edge">NO VACANCY <span>—</span> SINCE 1978</div>`;
 		this.root.querySelector('[data-action="primary"]').addEventListener('click', screen.callback);

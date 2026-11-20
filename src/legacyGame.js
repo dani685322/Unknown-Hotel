@@ -981,7 +981,12 @@ import './ui/admin-terminal.css';
                 if (!feed) return;
                 const line = document.createElement('div');
                 line.className = 'px-2.5 py-1 rounded-lg bg-black/75 border border-white/10 text-[11px] text-white shadow backdrop-blur-sm';
-                line.innerHTML = `<strong style="color:${color}">${sender}:</strong> <span>${text.replace(/</g, '&lt;')}</span>`;
+                const label = document.createElement('strong');
+                label.style.color = /^#[0-9a-f]{6}$/i.test(color) ? color : '#fbbf24';
+                label.textContent = `${String(sender ?? 'System').slice(0, 24)}:`;
+                const message = document.createElement('span');
+                message.textContent = String(text ?? '').slice(0, 160);
+                line.append(label, document.createTextNode(' '), message);
                 feed.appendChild(line);
                 while (feed.children.length > 4) feed.removeChild(feed.firstChild);
                 setTimeout(() => { if (line.parentNode) line.remove(); }, 7500);
@@ -1098,21 +1103,31 @@ import './ui/admin-terminal.css';
                     return;
                 }
                 box.classList.remove('hidden');
-                let html = '';
+                box.replaceChildren();
                 if (this.roomCode) {
-                    html += `<div class="flex items-center justify-between text-emerald-300 font-bold pb-1 border-b border-emerald-800/50">
-                        <span>👥 ROOM ${this.roomCode}</span>
-                        <span>${this.remotePlayers.size + 1} Players</span>
-                    </div>`;
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between text-emerald-300 font-bold pb-1 border-b border-emerald-800/50';
+                    const code = document.createElement('span');
+                    code.textContent = `👥 ROOM ${String(this.roomCode).slice(0, 8)}`;
+                    const count = document.createElement('span');
+                    count.textContent = `${this.remotePlayers.size + 1} Players`;
+                    header.append(code, count);
+                    box.append(header);
                 }
                 this.remotePlayers.forEach(av => {
                     const statusIcon = av.hp <= 0 ? '💀' : (av.hiding ? '🚪 Hiding' : `❤️ ${Math.ceil(av.hp)}`);
-                    html += `<div class="flex items-center justify-between text-amber-100">
-                        <span class="truncate max-w-[115px] font-semibold" style="color:${av.cssColor}">${av.name}</span>
-                        <span class="font-mono-code text-[10px]">${statusIcon}</span>
-                    </div>`;
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between text-amber-100';
+                    const name = document.createElement('span');
+                    name.className = 'truncate max-w-[115px] font-semibold';
+                    name.style.color = /^#[0-9a-f]{6}$/i.test(av.cssColor) ? av.cssColor : '#d4af37';
+                    name.textContent = String(av.name ?? 'Teammate').slice(0, 24);
+                    const status = document.createElement('span');
+                    status.className = 'font-mono-code text-[10px]';
+                    status.textContent = statusIcon;
+                    row.append(name, status);
+                    box.append(row);
                 });
-                box.innerHTML = html;
             }
 
             update(dt, elapsed) {
@@ -1271,8 +1286,6 @@ import './ui/admin-terminal.css';
                 this.yaw = Math.PI;
                 this.pitch = 0;
                 this.moveState = { forward: false, backward: false, left: false, right: false };
-                this.joystickVec = { x: 0, y: 0 };
-                this.touchUIVisible = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth < 900);
                 this.walkBobTimer = 0;
                 this.lastStepSound = 0;
 
@@ -1389,13 +1402,12 @@ import './ui/admin-terminal.css';
                     }
                 });
 
-                // Multi-Touch Right-Side Camera Look
+                // Keep swipe-to-look gestures on touchscreens without drawing touch controls.
                 let touchLookId = null;
                 let prevTouch = { x: 0, y: 0 };
                 this.canvas.addEventListener('touchstart', (e) => {
                     if (!this.isAlive) return;
                     this.sound.init();
-                    if (!this.touchUIVisible) this.setTouchUIVisible(true);
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const t = e.changedTouches[i];
                         if (touchLookId === null) {
@@ -1431,62 +1443,6 @@ import './ui/admin-terminal.css';
                 this.canvas.addEventListener('touchend', endTouchLook);
                 this.canvas.addEventListener('touchcancel', endTouchLook);
 
-                // Left-Thumb Virtual Joystick
-                const joyZone = document.getElementById('joystick-zone');
-                const joyKnob = document.getElementById('joystick-knob');
-                let joyTouchId = null;
-                let joyMouseDown = false;
-                const maxRadius = 38;
-
-                const updateJoystick = (clientX, clientY) => {
-                    const rect = joyZone.getBoundingClientRect();
-                    let dx = clientX - (rect.left + rect.width / 2);
-                    let dy = clientY - (rect.top + rect.height / 2);
-                    const dist = Math.hypot(dx, dy);
-                    if (dist > maxRadius) {
-                        dx = (dx / dist) * maxRadius;
-                        dy = (dy / dist) * maxRadius;
-                    }
-                    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-                    this.joystickVec.x = dx / maxRadius;
-                    this.joystickVec.y = -dy / maxRadius;
-                };
-
-                const resetJoystick = () => {
-                    joyTouchId = null;
-                    joyMouseDown = false;
-                    joyKnob.style.transform = `translate(0px, 0px)`;
-                    this.joystickVec.x = 0;
-                    this.joystickVec.y = 0;
-                };
-
-                joyZone.addEventListener('touchstart', (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    this.sound.init();
-                    joyTouchId = e.changedTouches[0].identifier;
-                    updateJoystick(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-                }, { passive: false });
-
-                joyZone.addEventListener('touchmove', (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    for (let i = 0; i < e.changedTouches.length; i++) {
-                        if (e.changedTouches[i].identifier === joyTouchId) {
-                            updateJoystick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
-                        }
-                    }
-                }, { passive: false });
-
-                joyZone.addEventListener('touchend', (e) => {
-                    for (let i = 0; i < e.changedTouches.length; i++) {
-                        if (e.changedTouches[i].identifier === joyTouchId) resetJoystick();
-                    }
-                });
-                joyZone.addEventListener('touchcancel', resetJoystick);
-
-                joyZone.addEventListener('mousedown', (e) => { e.stopPropagation(); joyMouseDown = true; updateJoystick(e.clientX, e.clientY); });
-                window.addEventListener('mousemove', (e) => { if (joyMouseDown) updateJoystick(e.clientX, e.clientY); });
-                window.addEventListener('mouseup', () => { if (joyMouseDown) resetJoystick(); });
-
                 // Keyboard Controls (ignore while typing in chat/name inputs)
                 window.addEventListener('keydown', (e) => {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
@@ -1519,13 +1475,8 @@ import './ui/admin-terminal.css';
                 });
 
                 // Touch Buttons
-                document.getElementById('touch-interact').addEventListener('click', (e) => { e.stopPropagation(); this.sound.init(); this.triggerInteraction(); });
-                document.getElementById('touch-crouch').addEventListener('click', (e) => { e.stopPropagation(); this.sound.init(); this.toggleCrouch(); });
-                document.getElementById('touch-use-item').addEventListener('click', (e) => { e.stopPropagation(); this.sound.init(); this.useEquippedItem(); });
                 document.getElementById('interact-prompt').addEventListener('click', (e) => { e.stopPropagation(); this.sound.init(); this.triggerInteraction(); });
 
-                this.setTouchUIVisible(this.touchUIVisible);
-                document.getElementById('btn-touch-toggle').addEventListener('click', () => this.setTouchUIVisible(!this.touchUIVisible));
                 document.getElementById('btn-fullscreen').addEventListener('click', () => {
                     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
                     else document.exitFullscreen?.().catch(() => {});
@@ -1790,12 +1741,7 @@ import './ui/admin-terminal.css';
                 document.getElementById('crouch-badge').classList.toggle('hidden', !this.isCrouching);
                 document.getElementById('speed-badge').classList.toggle('hidden', this.speedBoostTimer <= 0);
 
-                const touchCrouchBtn = document.getElementById('touch-crouch');
-                if (touchCrouchBtn) {
-                    touchCrouchBtn.className = this.isCrouching
-                        ? 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-600 border-2 border-amber-200 text-black flex flex-col items-center justify-center shadow-xl active:scale-95 transition'
-                        : 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-neutral-900/85 border-2 border-amber-600/60 text-amber-200 flex flex-col items-center justify-center shadow-xl active:scale-95 transition';
-                }
+
             }
 
             setGraphicsQuality(enabled) {
@@ -1812,17 +1758,7 @@ import './ui/admin-terminal.css';
                 if (menuToggle) menuToggle.textContent = this.highQuality ? 'HD' : 'Fast';
             }
 
-            setTouchUIVisible(visible) {
-                this.touchUIVisible = visible;
-                const wrapper = document.getElementById('mobile-controls-wrapper');
-                const toggleBtn = document.getElementById('btn-touch-toggle');
-                if (wrapper) wrapper.classList.toggle('hidden', !visible);
-                if (toggleBtn) {
-                    toggleBtn.className = visible
-                        ? 'px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-sky-600 border border-sky-300 text-black text-[11px] sm:text-xs font-bold transition shadow-lg'
-                        : 'px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-sky-950/85 hover:bg-sky-900 border border-sky-500/60 text-sky-200 text-[11px] sm:text-xs font-semibold transition shadow-lg';
-                }
-            }
+
 
             showBanner(text, duration = 3800) {
                 const banner = document.getElementById('event-banner');
@@ -2706,8 +2642,8 @@ import './ui/admin-terminal.css';
                     let baseSpeed = this.isCrouching ? 3.25 : (this.isSprinting ? 8.8 : 6.25);
                     if (this.speedBoostTimer > 0) baseSpeed *= 1.45;
 
-                    let strafe = (this.moveState.right ? 1 : 0) - (this.moveState.left ? 1 : 0) + this.joystickVec.x;
-                    let forward = (this.moveState.forward ? 1 : 0) - (this.moveState.backward ? 1 : 0) + this.joystickVec.y;
+                    let strafe = (this.moveState.right ? 1 : 0) - (this.moveState.left ? 1 : 0);
+                    let forward = (this.moveState.forward ? 1 : 0) - (this.moveState.backward ? 1 : 0);
 
                     if (strafe !== 0 || forward !== 0) {
                         const length = Math.hypot(strafe, forward);
@@ -2774,18 +2710,14 @@ import './ui/admin-terminal.css';
                 }
                 this.activeInteractable = closest;
                 const promptEl = document.getElementById('interact-prompt');
-                const touchInteractLabel = document.getElementById('touch-interact-label');
                 if (this.isHiding) {
                     promptEl.classList.add('hidden');
-                    if (touchInteractLabel) touchInteractLabel.textContent = 'EXIT';
                 } else if (closest) {
                     promptEl.classList.remove('hidden');
                     document.getElementById('interact-title').textContent = closest.title;
                     document.getElementById('interact-desc').textContent = closest.desc;
-                    if (touchInteractLabel) touchInteractLabel.textContent = closest.title.split(' ')[0].toUpperCase();
                 } else {
                     promptEl.classList.add('hidden');
-                    if (touchInteractLabel) touchInteractLabel.textContent = 'USE [E]';
                 }
 
                 // Update Co-Op Multiplayer Avatars & Entities

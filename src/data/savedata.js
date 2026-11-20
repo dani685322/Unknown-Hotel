@@ -12,24 +12,36 @@ export function loadSaveData() {
 export function saveAccountData(account) {
   if (!account) return;
   const current = loadSaveData();
-  localStorage.setItem(SAVE_KEY, JSON.stringify({
-    ...current,
-    account: String(account).trim(),
-    savedAt: Date.now(),
-  }));
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...current,
+      account: String(account).trim(),
+      savedAt: Date.now(),
+    }));
+  } catch {
+    // Storage may be unavailable or full; keep the current session usable.
+  }
 }
 
 export function saveRunData(runData) {
   const current = loadSaveData();
-  localStorage.setItem(SAVE_KEY, JSON.stringify({
-    ...current,
-    run: runData && typeof runData === 'object' ? runData : null,
-    savedAt: Date.now(),
-  }));
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...current,
+      run: runData && typeof runData === 'object' ? runData : null,
+      savedAt: Date.now(),
+    }));
+  } catch {
+    // Storage may be unavailable or full; the in-memory run can continue.
+  }
 }
 
 export function clearRunData() {
   const current = loadSaveData();
   delete current.run;
-  localStorage.setItem(SAVE_KEY, JSON.stringify(current));
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(current));
+  } catch {
+    // Clearing a saved run must not prevent returning to the title screen.
+  }
 }

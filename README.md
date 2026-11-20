@@ -29,6 +29,8 @@ A procedural horror-survival game built with Three.js and an authoritative Node.
 | `Space` | Drop item |
 | `/` | Open the owner Admin terminal (If Admin) |
 
+The virtual joystick and on-screen crouch, item, and interact buttons have been removed. Movement and actions require a keyboard; touch gestures can still rotate the camera.
+
 ## Multiplayer
 
 1. Start the backend and browser app.
@@ -55,7 +57,7 @@ Public parties and private party codes both support up to four human or bot slot
 
 Before starting the game, install:
 
-- [Node.js](https://nodejs.org/) 18 or newer.
+- [Node.js](https://nodejs.org/) 22 or newer.
 - npm, included with Node.js.
 - A modern desktop browser such as Chrome, Edge, or Firefox.
 - Two browser windows or devices only if you want to test multiplayer.
@@ -177,6 +179,14 @@ Use this format:
 Do not remove old entries. Keep entries concise and describe what the player can now do or what changed behaviorally.
 
 ## Updates
+
+### 1.0.1.10 - Remove touchscreen HUD controls
+
+- Remove the virtual joystick, crouch, item, and interact buttons and their listeners.
+- Keep touch camera-look gestures and clarify that keyboard input is required for movement and actions.
+- Harden lobby rendering against injected player and party names; limit and heartbeat-check WebSocket traffic.
+- Keep saved preferences and run data optional when browser storage is blocked or full.
+- Validation: production build, syntax checks, browser control/terminal checks, and port 5173 HTTP checks.
 
 ### 1.0.1.9 - Correct movement and terminal Admin
 

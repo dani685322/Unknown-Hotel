@@ -9,8 +9,12 @@ export function recognizeSavedAccount() {
 
 export function rememberAccountForDevice(account) {
   if (!account) return;
-  localStorage.setItem('unknown-hotel.ip-recognition', JSON.stringify({
-    account: String(account).trim(),
-    recognizedAt: Date.now(),
-  }));
+  try {
+    localStorage.setItem('unknown-hotel.ip-recognition', JSON.stringify({
+      account: String(account).trim(),
+      recognizedAt: Date.now(),
+    }));
+  } catch {
+    // Device recognition is optional when browser storage is blocked.
+  }
 }

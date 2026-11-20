@@ -21,12 +21,20 @@ export class WebSocketClient {
   }
 
   connect() {
-    this.socket = new WebSocket(this.url);
-    this.socket.addEventListener('open', () => {
+    if (this.socket && [WebSocket.CONNECTING, WebSocket.OPEN].includes(this.socket.readyState)) return false;
+    try {
+      this.socket = new WebSocket(this.url);
+    } catch (error) {
+      this.onError?.(error instanceof Error ? error.message : 'Could not open the WebSocket connection.');
+      return false;
+    }
+    const socket = this.socket;
+    socket.addEventListener('open', () => {
+      if (this.socket !== socket) return;
       this.send({ type: 'join', username: this.username, token: this.token, client: 'unknown-hotel-beta' });
       this.onOpen?.();
     });
-    this.socket.addEventListener('message', (event) => {
+    socket.addEventListener('message', (event) => {
       let message;
       try {
         message = JSON.parse(event.data);
@@ -34,9 +42,13 @@ export class WebSocketClient {
         this.onError?.('The server sent an invalid message.');
         return;
       }
-      if (message.type === 'players') this.onPlayers?.(message.players ?? []);
+      if (!message || typeof message !== 'object' || Array.isArray(message) || typeof message.type !== 'string') {
+        this.onError?.('The server sent an invalid message.');
+        return;
+      }
+      if (message.type === 'players') this.onPlayers?.(Array.isArray(message.players) ? message.players : []);
       if (message.type === 'party') this.onParty?.(message);
-      if (message.type === 'public_parties') this.onPublicParties?.(message.parties ?? []);
+      if (message.type === 'public_parties') this.onPublicParties?.(Array.isArray(message.parties) ? message.parties : []);
       if (message.type === 'party_joined') this.onPartyJoined?.(message);
       if (message.type === 'party_started') this.onPartyStarted?.(message);
       if (message.type === 'party_full') this.onError?.(message.message ?? 'The party is full.');
@@ -55,14 +67,26 @@ export class WebSocketClient {
       if (message.type === 'room_state') this.onRoomState?.(message);
       if (message.type === 'party_left') this.onPartyLeft?.();
     });
-    this.socket.addEventListener('close', (event) => this.onClose?.(event));
-    this.socket.addEventListener('error', () => this.onError?.('Could not connect to the WebSocket server.'));
+    socket.addEventListener('close', (event) => {
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.onClose?.(event);
+    });
+    socket.addEventListener('error', () => this.onError?.('Could not connect to the WebSocket server.'));
+    return true;
   }
 
   send(message) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
-      return true;
+      try {
+        const payload = JSON.stringify(message);
+        if (typeof payload !== 'string') return false;
+        this.socket.send(payload);
+        return true;
+      } catch (error) {
+        this.onError?.(error instanceof Error ? error.message : 'Could not send a message.');
+        return false;
+      }
     }
     return false;
   }
@@ -128,8 +152,10 @@ export class WebSocketClient {
   }
 
   disconnect() {
-    this.send({ type: 'leave', username: this.username });
-    this.socket?.close();
+    const socket = this.socket;
+    if (!socket) return;
+    if (socket.readyState === WebSocket.OPEN) this.send({ type: 'leave', username: this.username });
+    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close(1000, 'Client disconnected');
   }
 }
 

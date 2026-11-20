@@ -1,6 +1,7 @@
 import { WebSocketClient } from '../net/WebSocketClient.js';
 import { saveAccountData } from '../data/savedata.js';
 import { recognizeSavedAccount, rememberAccountForDevice } from '../data/ipadressrecognize.js';
+import { escapeHtml } from '../core/escapeHtml.js';
 
 const ACCOUNT_KEY = 'unknown-hotel.playerspassword.txt';
 const SESSION_ACCOUNT_KEY = 'unknown-hotel.signed-in-account';
@@ -74,14 +75,14 @@ export class MultiplayerMenu {
           <button type="button" data-auth-mode="register" class="${mode === 'register' ? 'active' : ''}">Sign Up</button>
         </div>
         <form class="multiplayer-auth">
-          <label>Server<input name="server" value="${this.getApiUrl()}" placeholder="http://localhost:8080" required></label>
+          <label>Server<input name="server" value="${escapeHtml(this.getApiUrl())}" placeholder="http://localhost:8080" required></label>
           <label>Username<input name="username" maxlength="24" autocomplete="username" required></label>
           <label>Password<input name="password" type="password" minlength="6" maxlength="64" autocomplete="current-password" required></label>
           <div class="multiplayer-actions">
             <button type="submit" name="mode" value="${mode}">${mode === 'register' ? 'Create account' : 'Login'}</button>
           </div>
         </form>
-        <p class="multiplayer-message">${message}</p>
+        <p class="multiplayer-message">${escapeHtml(message)}</p>
         <button class="multiplayer-close" type="button">Back</button>
       </div>`;
     this.root.querySelector('.multiplayer-close').addEventListener('click', () => this.close());
@@ -139,11 +140,11 @@ export class MultiplayerMenu {
     this.root.innerHTML = `
       <div class="multiplayer-panel">
         <p class="multiplayer-eyebrow">BETA / LOCAL LOBBY</p>
-        <h2>${this.account}</h2>
-        <label class="multiplayer-server">WebSocket server<input id="beta-server" value="${this.getServerUrl()}" placeholder="wss://server.example.com"></label>
+        <h2>${escapeHtml(this.account)}</h2>
+        <label class="multiplayer-server">WebSocket server<input id="beta-server" value="${escapeHtml(this.getServerUrl())}" placeholder="wss://server.example.com"></label>
         <div class="multiplayer-status"><b>Lobby status</b><span id="beta-status">Disconnected</span></div>
         <div class="party-tools">
-          <label>Party name<input id="party-name" maxlength="30" value="${this.account}'s party"></label>
+          <label>Party name<input id="party-name" maxlength="30" value="${escapeHtml(`${this.account}'s party`)}"></label>
           <label>Visibility<select id="party-visibility"><option value="public">Public</option><option value="private">Private</option></select></label>
           <label>Difficulty<select id="party-difficulty"><option value="Easy">Easy</option><option value="Normal" selected>Normal</option><option value="Hard">Hard</option><option value="Extreme">Extreme</option><option value="Hell">Hell</option></select></label>
           <button type="button" id="party-create">Create Party</button>
@@ -152,7 +153,7 @@ export class MultiplayerMenu {
         </div>
         <div class="public-parties" id="public-parties"></div>
         <div class="multiplayer-player-list" id="beta-player-list"></div>
-        <p class="multiplayer-message">${message}</p>
+        <p class="multiplayer-message">${escapeHtml(message)}</p>
         <div class="multiplayer-actions">
           <button type="button" id="beta-connect">Connect</button>
           <button type="button" id="beta-download">Download account file</button>
@@ -283,25 +284,26 @@ export class MultiplayerMenu {
     }
     const isLeader = this.party.leader === this.account;
     const botControls = (this.party.bots ?? []).map((bot) =>
-      isLeader ? `<div class="party-member-row bot-member"><b>${bot}</b><button type="button" data-remove-bot="${bot}">Remove</button></div>` : `<span class="party-bot-label">${bot} / Bot</span>`
+      isLeader ? `<div class="party-member-row bot-member"><b>${escapeHtml(bot)}</b><button type="button" data-remove-bot="${escapeHtml(bot)}">Remove</button></div>` : `<span class="party-bot-label">${escapeHtml(bot)} / Bot</span>`
     ).join('');
     const followerControls = this.party.members
       .filter((member) => member !== this.party.leader)
       .map((member) => {
-        if (!isLeader || member === this.account) return `<span class="party-player-label">${member}</span>`;
-        return `<div class="party-member-row"><b>${member}</b><div><button type="button" data-leader="${member}">Lead</button><button type="button" data-kick="${member}">Kick</button><button type="button" data-ban="${member}">Ban</button></div></div>`;
+        const safeMember = escapeHtml(member);
+        if (!isLeader || member === this.account) return `<span class="party-player-label">${safeMember}</span>`;
+        return `<div class="party-member-row"><b>${safeMember}</b><div><button type="button" data-leader="${safeMember}">Lead</button><button type="button" data-kick="${safeMember}">Kick</button><button type="button" data-ban="${safeMember}">Ban</button></div></div>`;
       }).join('');
-    const humanControls = `<div class="party-leader-block"><div class="party-member-row party-leader-row"><b>${this.party.leader} / Leader</b><span class="party-member-tag">${this.party.leader === this.account ? 'YOU' : 'LEADER'}</span></div><div class="party-members-under-leader">${followerControls}${botControls}</div></div>`;
+    const humanControls = `<div class="party-leader-block"><div class="party-member-row party-leader-row"><b>${escapeHtml(this.party.leader)} / Leader</b><span class="party-member-tag">${this.party.leader === this.account ? 'YOU' : 'LEADER'}</span></div><div class="party-members-under-leader">${followerControls}${botControls}</div></div>`;
     const addBot = isLeader ? '<button type="button" id="party-add-bot">+ Add Bot</button>' : '';
     const difficultyControl = isLeader
       ? `<label class="party-difficulty">Difficulty<select id="party-difficulty-live"><option ${this.party.difficulty === 'Easy' ? 'selected' : ''}>Easy</option><option ${this.party.difficulty === 'Normal' ? 'selected' : ''}>Normal</option><option ${this.party.difficulty === 'Hard' ? 'selected' : ''}>Hard</option><option ${this.party.difficulty === 'Extreme' ? 'selected' : ''}>Extreme</option><option ${this.party.difficulty === 'Hell' ? 'selected' : ''}>Hell</option></select></label>`
-      : `<p class="party-difficulty-readout">Difficulty <b>${this.party.difficulty ?? 'Normal'}</b></p>`;
+      : `<p class="party-difficulty-readout">Difficulty <b>${escapeHtml(this.party.difficulty ?? 'Normal')}</b></p>`;
     const memberCount = this.party.members.length + (this.party.bots ?? []).length;
     const canStart = memberCount >= 2;
     const startButton = isLeader
       ? `<button type="button" id="party-start" class="party-start ${canStart ? 'ready' : ''}" ${canStart ? '' : 'disabled'}>Start Hotel</button>`
       : `<button type="button" class="party-start waiting" disabled>Waiting for leader</button>`;
-    view.innerHTML = `<h3>${this.party.name}</h3><p>Code <b>${this.party.code}</b> · ${this.party.visibility}</p>${difficultyControl}<div class="party-members">${humanControls}</div>${addBot}${startButton}<button type="button" id="party-leave">Leave Party</button>`;
+    view.innerHTML = `<h3>${escapeHtml(this.party.name)}</h3><p>Code <b>${escapeHtml(this.party.code)}</b> · ${escapeHtml(this.party.visibility)}</p>${difficultyControl}<div class="party-members">${humanControls}</div>${addBot}${startButton}<button type="button" id="party-leave">Leave Party</button>`;
     view.querySelector('#party-leave')?.addEventListener('click', () => this.ws?.leaveParty());
     view.querySelectorAll('[data-leader]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.makeLeader(button.dataset.leader));
@@ -331,7 +333,7 @@ export class MultiplayerMenu {
     const host = this.root.querySelector('#public-parties');
     if (!host) return;
     host.innerHTML = this.publicParties.length
-      ? `<h3>Public Parties</h3>${this.publicParties.map((party) => `<div class="public-party-row"><div><b>${party.name}</b><span>${party.members}/4 · ${party.difficulty ?? 'Normal'} · ${party.code}</span></div><button type="button" data-public-code="${party.code}">Join</button></div>`).join('')}`
+      ? `<h3>Public Parties</h3>${this.publicParties.map((party) => `<div class="public-party-row"><div><b>${escapeHtml(party.name)}</b><span>${escapeHtml(party.members)}/4 · ${escapeHtml(party.difficulty ?? 'Normal')} · ${escapeHtml(party.code)}</span></div><button type="button" data-public-code="${escapeHtml(party.code)}">Join</button></div>`).join('')}`
       : '<p>No public parties.</p>';
     host.querySelectorAll('[data-public-code]').forEach((button) => {
       button.addEventListener('click', () => this.ws?.joinParty(button.dataset.publicCode));
@@ -350,7 +352,7 @@ export class MultiplayerMenu {
     const list = this.root.querySelector('#beta-player-list');
     if (!list) return;
     const names = [this.account, ...this.players.map((player) => typeof player === 'string' ? player : player.username).filter(Boolean)].filter((name, index, values) => values.indexOf(name) === index);
-    list.innerHTML = names.map((name) => `<div><span></span>${name}</div>`).join('');
+    list.innerHTML = names.map((name) => `<div><span></span>${escapeHtml(name)}</div>`).join('');
   }
 
   downloadAccounts() {
