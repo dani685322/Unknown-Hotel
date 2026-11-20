@@ -18,6 +18,7 @@ export class Admin {
     this.opened = false;
 
     this.root = document.createElement('section');
+    this.root.id = game.isLegacyGame ? 'admin-panel' : 'admin-terminal';
     this.root.className = 'admin';
     this.root.hidden = true;
     this.root.setAttribute('aria-label', 'Developer console');
@@ -50,6 +51,10 @@ export class Admin {
   }
 
   _registerBuiltins() {
+    if (this.game.isLegacyGame) {
+      this._registerLegacyBuiltins();
+      return;
+    }
     this.register('help', 'list available commands', () =>
       Object.entries(this.commands).map(([name, command]) => `${name.padEnd(12)} ${command.help}`).join('\n'));
     this.register('noclip', 'toggle player collision', () => {
@@ -126,6 +131,76 @@ export class Admin {
     });
   }
 
+  _registerLegacyBuiltins() {
+    this.register('help', 'list available commands', () =>
+      Object.entries(this.commands).map(([name, command]) => `${name.padEnd(12)} ${command.help}`).join('\n'));
+    this.register('rooms', 'list the 100 generated hotel rooms', () => {
+      const plans = Array.from({ length: 100 }, (_, index) =>
+        this.game.legacyRoomPlan(index + 1));
+      return plans.map((room) => `${String(room.roomNum).padStart(3, '0')}  ${room.roomType.padEnd(10)} ${room.subtitle}`).join('\n');
+    });
+    this.register('tp', 'tp <roomId>  teleport to a room (001–100)', (args) => {
+      const roomNum = this._roomIndex(args[0]);
+      if (roomNum < 0) return 'Room not found. Use rooms to list generated rooms.';
+      if (!this.game.isAlive) return 'Start a run before teleporting.';
+      this.game.warpToRoom(roomNum);
+      return `Teleported to Room ${String(roomNum).padStart(3, '0')}.`;
+    });
+    this.register('spawn', 'spawn <chaser|rush|ambush> [room]', (args) => {
+      const type = String(args[0] ?? '').toLowerCase();
+      if (!['chaser', 'rush', 'ambush'].includes(type)) return 'Usage: spawn <chaser|rush|ambush> [room]';
+      if (args[1]) {
+        const roomNum = this._roomIndex(args[1]);
+        if (roomNum < 0) return 'Room not found. Use rooms to list generated rooms.';
+        if (!this.game.isAlive) return 'Start a run before changing rooms.';
+        if (roomNum !== this.game.currentRoomNum) this.game.warpToRoom(roomNum);
+      }
+      if (!this.game.isAlive || !this.game.currentRoomData) return 'Start a run before spawning an encounter.';
+      if (type === 'rush') this.game.spawnRushOrAmbush(false);
+      else if (type === 'ambush') this.game.spawnRushOrAmbush(true);
+      else this.game.spawnSeekChase(this.game.currentRoomData);
+      const entity = type === 'rush' || type === 'ambush' ? this.game.rushEntity : this.game.seekEntity;
+      return entity ? `Spawned ${type}: ${entity.id}` : `Could not spawn ${type}; an encounter may already be active.`;
+    });
+    this.register('kill', 'kill <entityId|entityType|all>', (args) => {
+      if (!args[0]) return 'Usage: kill <entityId|entityType|all>';
+      return this.game.removeLegacyEntity(args[0]);
+    });
+    this.register('noclip', 'toggle room boundary collision', () => {
+      this.game.noclip = !this.game.noclip;
+      return `noclip ${this.game.noclip ? 'enabled' : 'disabled'}`;
+    });
+    this.register('god', 'toggle player invulnerability', () => {
+      this.game.godmode = !this.game.godmode;
+      return `godmode ${this.game.godmode ? 'enabled' : 'disabled'}`;
+    });
+    this.register('timescale', 'timescale <n>  set simulation speed (0 to 4)', (args) => {
+      const value = Number(args[0]);
+      if (!Number.isFinite(value) || value < 0 || value > 4) return 'Timescale must be between 0 and 4.';
+      this.game.timeScale = value;
+      return `timescale ${value}`;
+    });
+    this.register('stats', 'toggle FPS and draw-call statistics', () => {
+      this.game.statsElement.hidden = !this.game.statsElement.hidden;
+      return `stats ${this.game.statsElement.hidden ? 'disabled' : 'enabled'}`;
+    });
+    this.register('close', 'close the developer console', () => {
+      queueMicrotask(() => this.close());
+      return 'Closing developer console.';
+    });
+    this.register('terminal', 'close the developer console', () => {
+      queueMicrotask(() => this.close());
+      return 'Closing developer console.';
+    });
+  }
+
+  _isOwner() {
+    const account = this.game.multiplayer?.account;
+    const lobbyName = document.getElementById('coop-player-name')?.value;
+    const peerName = this.game.multiplayer?.myName;
+    return ADMIN_USERNAMES.has(String(account || lobbyName || peerName || '').trim().toLowerCase());
+  }
+
   _readHistory() {
     try {
       const saved = JSON.parse(sessionStorage.getItem(HISTORY_KEY) ?? '[]');
@@ -184,6 +259,11 @@ export class Admin {
   }
 
   _roomIndex(id) {
+    if (this.game.isLegacyGame) {
+      const text = String(id ?? '').trim().toLowerCase();
+      const number = Number(text.replace(/^(room|door)\s*0*/, ''));
+      return Number.isInteger(number) && number >= 1 && number <= 100 ? number : -1;
+    }
     const rooms = this.game.run?.rooms ?? [];
     if (!rooms.length || !id) return -1;
     const text = String(id).trim().toLowerCase();
@@ -222,13 +302,22 @@ export class Admin {
   }
 
   _onGlobalKey(event) {
-    const username = this.game.multiplayer?.account?.trim().toLowerCase();
-    if (!this.enabled || !ADMIN_USERNAMES.has(username)) return;
+    if (!this.enabled) return;
+    const editing = event.target?.closest?.('input, textarea, [contenteditable="true"]');
+    if (editing && !(this.opened && editing === this.input)) return;
     const shortcut = event.code === 'Backquote' || (event.code === 'Slash' && !this.opened) || (event.code === 'KeyA' && event.ctrlKey && event.shiftKey);
     if (event.type === 'keydown' && shortcut && !event.repeat) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (!this._isOwner()) {
+        this.game.showBanner?.('The Admin terminal is restricted to owner accounts.');
+        return;
+      }
       this.toggle();
+      return;
+    }
+    if (this.opened && !this._isOwner()) {
+      this.close();
       return;
     }
     if (this.opened) this._trap(event);
@@ -263,8 +352,10 @@ export class Admin {
     if (tokens.length === 1) {
       candidates = Object.keys(this.commands).filter((name) => name.startsWith(prefix));
     } else if ((tokens[0].toLowerCase() === 'tp' && tokens.length >= 2) || (tokens[0].toLowerCase() === 'spawn' && tokens.length >= 3)) {
-      const rooms = this.game.run?.rooms ?? [];
-      candidates = rooms.map((room, index) => String(index + 1).padStart(3, '0')).filter((id) => id.startsWith(prefix));
+      const rooms = this.game.isLegacyGame
+        ? Array.from({ length: 100 }, (_, index) => String(index + 1).padStart(3, '0'))
+        : (this.game.run?.rooms ?? []).map((room, index) => String(index + 1).padStart(3, '0'));
+      candidates = rooms.filter((id) => id.startsWith(prefix));
     }
     if (candidates.length === 1) {
       tokens[tokens.length - 1] = candidates[0];
@@ -276,8 +367,17 @@ export class Admin {
 
   open() {
     if (this.opened) return;
+    if (!this._isOwner()) {
+      this.game.showBanner?.('The Admin terminal is restricted to owner accounts.');
+      return;
+    }
     this.opened = true;
-    Object.assign(this.game.input?.keys ?? {}, { forward: false, back: false, left: false, right: false });
+    const movement = this.game.isLegacyGame ? this.game.moveState : this.game.input?.keys;
+    if (movement) Object.assign(movement, { forward: false, back: false, backward: false, left: false, right: false });
+    if (this.game.isLegacyGame) {
+      this.game.isSprinting = false;
+      this.game.isCrouching = false;
+    }
     if (this.game.input) {
       this.game.input.sprint = false;
       this.game.input.crouch = false;
@@ -291,7 +391,8 @@ export class Admin {
     if (!this.opened) return;
     this.opened = false;
     this.root.hidden = true;
-    this.player && Object.assign(this.game.input?.keys ?? {}, { forward: false, back: false, left: false, right: false });
+    const movement = this.game.isLegacyGame ? this.game.moveState : this.game.input?.keys;
+    if (movement) Object.assign(movement, { forward: false, back: false, backward: false, left: false, right: false });
     if (this.game.input) {
       this.game.input.sprint = false;
       this.game.input.crouch = false;
@@ -301,6 +402,14 @@ export class Admin {
     }
     this.input.blur();
     if (this.game.state === 'playing') this.game.requestLock?.();
+    else if (this.game.isLegacyGame && this.game.isAlive) {
+      try {
+        const lockRequest = this.game.canvas.requestPointerLock?.();
+        lockRequest?.catch?.(() => {});
+      } catch {
+        // Pointer lock may be denied when a browser requires a fresh gesture.
+      }
+    }
   }
 
   toggle() {

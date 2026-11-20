@@ -79,9 +79,13 @@ export class Input {
   }
 
   moveAxes() {
-    const x = (this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0);
-    const z = (this.keys.back ? 1 : 0) - (this.keys.forward ? 1 : 0);
-    const len = Math.hypot(x, z) || 1;
-    return { x: x / len, z: z / len };
+    let strafe = (this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0);
+    let forward = (this.keys.forward ? 1 : 0) - (this.keys.back ? 1 : 0);
+    const length = Math.hypot(strafe, forward);
+    if (length > 1) {
+      strafe /= length;
+      forward /= length;
+    }
+    return { strafe, forward };
   }
 }

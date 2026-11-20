@@ -64,7 +64,7 @@ export class Player {
     // --- stance ---
     this.crouching = !!input.crouch;
     const axes = input.moveAxes();
-    this.moving = axes.x !== 0 || axes.z !== 0;
+    this.moving = axes.strafe !== 0 || axes.forward !== 0;
 
     const wantsSprint = input.sprint && !this.crouching && this.moving;
     this.sprinting = wantsSprint && this.stamina > 0;
@@ -88,10 +88,10 @@ export class Player {
                : SPEED.walk;
     const speed = base * this.speedMul;
 
-    // --- move in yaw space (forward = -Z at yaw 0) ---
+    // --- move in camera space (camera faces -Z at yaw 0) ---
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    const dx = (cos * axes.x + sin * axes.z) * speed * dt;
-    const dz = (-sin * axes.x + cos * axes.z) * speed * dt;
+    const dx = (cos * axes.strafe - sin * axes.forward) * speed * dt;
+    const dz = (-sin * axes.strafe - cos * axes.forward) * speed * dt;
 
     this.position.x += dx;
     this.position.z += dz;

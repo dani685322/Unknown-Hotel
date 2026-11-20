@@ -178,6 +178,13 @@ Do not remove old entries. Keep entries concise and describe what the player can
 
 ## Updates
 
+### 1.0.1.9 - Correct movement and terminal Admin
+
+- Fix camera-relative `W/A/S/D` direction in the main game and use explicit forward/strafe axes in the modular player controls.
+- Make `Q` use the selected item and `F` toggle the equipped light, matching the controls table.
+- Replace clickable Admin power buttons with the owner-gated command terminal and wire up the README shortcuts and commands in the active game.
+- Validation: production build, syntax checks, and browser checks for all movement directions, terminal commands, Room 100 teleport, and clean console output.
+
 ### 1.0.1.8 - Entity and room generation modules
 
 - Extract entity behavior and procedural entity textures into `src/entities` modules.

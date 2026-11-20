@@ -132,7 +132,7 @@ export const legacyEntityMethods = {
                 group.position.set(0, 1.9, startZ);
                 this.scene.add(group);
 
-                this.rushEntity = { isAmbush, mesh: group, auraPts, startZ, endZ, dir: -1, reboundsLeft: isAmbush ? 3 : 0, speed: isAmbush ? 28 : 21, delayTimer: 2.3 };
+                this.rushEntity = { id: this.nextEntityId(isAmbush ? 'ambush' : 'rush'), isAmbush, mesh: group, auraPts, startZ, endZ, dir: -1, reboundsLeft: isAmbush ? 3 : 0, speed: isAmbush ? 28 : 21, delayTimer: 2.3 };
                 this.updateHUD();
             },
             spawnScreech(fromNetwork = false) {
@@ -147,7 +147,7 @@ export const legacyEntityMethods = {
                 sprite.position.set(this.playerPos.x - Math.sin(behindAngle) * 2.7, this.playerPos.y + 0.22, this.playerPos.z - Math.cos(behindAngle) * 2.7);
                 this.scene.add(sprite);
 
-                this.screechEntity = { mesh: sprite, timer: 2.8, stareProgress: 0 };
+                this.screechEntity = { id: this.nextEntityId('screech'), mesh: sprite, timer: 2.8, stareProgress: 0 };
                 this.updateHUD();
             },
             spawnEyes(roomObj, fromNetwork = false) {
@@ -161,7 +161,7 @@ export const legacyEntityMethods = {
                 group.position.set(0, 2.05, roomObj.origin.z - roomObj.length * 0.55);
                 this.scene.add(group);
 
-                this.eyesEntity = { mesh: group, baseY: 2.05 };
+                this.eyesEntity = { id: this.nextEntityId('eyes'), mesh: group, baseY: 2.05 };
                 this.showBanner('👁️ Eyes appeared! Look down at the carpet while passing!');
                 this.updateHUD();
             },
@@ -202,7 +202,7 @@ export const legacyEntityMethods = {
 
                 group.position.set(0, 0, originVec.z - length * 0.5);
                 this.scene.add(group);
-                this.figureEntity = { mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, patrolTimer: 0, originZ: originVec.z - length * 0.5 };
+                this.figureEntity = { id: this.nextEntityId('figure'), mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, patrolTimer: 0, originZ: originVec.z - length * 0.5 };
                 this.updateHUD();
             },
             spawnSeekChase(roomObj, fromNetwork = false) {
@@ -225,7 +225,7 @@ export const legacyEntityMethods = {
 
                 group.position.set(0, 0, roomObj.origin.z + 4.8);
                 this.scene.add(group);
-                this.seekEntity = { mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, speed: 5.85 };
+                this.seekEntity = { id: this.nextEntityId('seek'), mesh: group, limbs: { leftArm, rightArm, leftLeg, rightLeg }, speed: 5.85 };
                 this.updateHUD();
             },
             triggerDupeAttack() {

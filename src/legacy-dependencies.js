@@ -28,3 +28,5 @@ if (typeof window.DoorsHotelGame === 'function') {
     }
   }, { once: true });
 }
+
+export { THREE, Peer, EffectComposer, RenderPass, UnrealBloomPass, LegacyRoomGeneration, EntityTextures };
