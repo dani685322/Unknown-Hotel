@@ -346,8 +346,7 @@ export const legacyEntityMethods = {
                 if (this.figureEntity) {
                     const f = this.figureEntity;
                     f.patrolTimer += dt;
-                    const isMoving = this.moveState.forward || this.moveState.backward || this.moveState.left || this.moveState.right ||
-                        Math.abs(this.joystickVec.x) > 0.15 || Math.abs(this.joystickVec.y) > 0.15;
+                    const isMoving = this.moveState.forward || this.moveState.backward || this.moveState.left || this.moveState.right;
                     const playerMakingNoise = !this.isCrouching && !this.isHiding && isMoving;
 
                     const prevPos = f.mesh.position.clone();

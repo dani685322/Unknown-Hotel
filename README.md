@@ -143,7 +143,7 @@ git diff --check
 
 ## Admin
 
-The Admin terminal is available only to the server owner account. Open it with `/`, a backtick, or `Ctrl+Shift+A`.
+The Admin terminal is available only after signing in with a username listed in `Secret Folder/UsernameAdmin.js`. A display name alone does not grant Admin access. Open it with `/`, a backtick, or `Ctrl+Shift+A`.
 
 Useful commands:
 
@@ -174,13 +174,21 @@ Use this format:
 - Added or changed behavior.
 - Fixed bug or clarified a limitation.
 - Validation performed, when useful.
+- For update format, include the version number like this for example: `### 1.0.1.9 goes to 1.0.2.0 and that will be named the app Version 2 of the (title)###`
 ```
 
 Do not remove old entries. Keep entries concise and describe what the player can now do or what changed behaviorally.
 
 ## Updates
 
-### 1.0.1.10 - Remove touchscreen HUD controls
+### 1.0.2.1 - Fix Door 050 freeze and gate Admin by account
+
+- Remove a stale touch-control reference that crashed the Figure update loop in the Library at Door 050.
+- Reduce Library book draw calls with instanced meshes and dispose old room resources as the run advances.
+- Connect the sign-in screen to the active game and grant Admin only to a signed-in username listed in `UsernameAdmin.js`.
+- Validation: production build, JavaScript syntax checks, Door 050 browser regression, Admin allow/deny checks, and port 5173 HTTP check.
+
+### 1.0.2.0 - Remove touchscreen HUD controls
 
 - Remove the virtual joystick, crouch, item, and interact buttons and their listeners.
 - Keep touch camera-look gestures and clarify that keyboard input is required for movement and actions.

@@ -1,4 +1,4 @@
-import { ADMIN_USERNAMES, CHAT_ROLES } from '../Secret Folder/UsernameAdmin.js';
+import { CHAT_ROLES, isAdminUsername } from '../Secret Folder/UsernameAdmin.js';
 
 const HISTORY_KEY = 'unknown-hotel-admin-history';
 const MAX_HISTORY = 50;
@@ -195,10 +195,8 @@ export class Admin {
   }
 
   _isOwner() {
-    const account = this.game.multiplayer?.account;
-    const lobbyName = document.getElementById('coop-player-name')?.value;
-    const peerName = this.game.multiplayer?.myName;
-    return ADMIN_USERNAMES.has(String(account || lobbyName || peerName || '').trim().toLowerCase());
+    const username = this.game.ownerSession?.username;
+    return isAdminUsername(username);
   }
 
   _readHistory() {

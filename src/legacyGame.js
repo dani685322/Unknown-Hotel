@@ -1,5 +1,7 @@
 import { THREE, Peer, EffectComposer, RenderPass, UnrealBloomPass } from './legacy-dependencies.js';
 import { Admin } from './Admin.js';
+import { MultiplayerMenu } from './ui/MultiplayerMenu.js';
+import './ui/mainmenu.css';
 import './ui/admin-terminal.css';
 
         /***********************************************************************
@@ -1245,7 +1247,17 @@ import './ui/admin-terminal.css';
 
                 this.viewmodel = new ViewmodelController(this.camera);
                 this.multiplayer = new MultiplayerManager(this);
+                this.ownerSession = null;
                 this.admin = new Admin({ game: this, scene: this.scene, player: this, entities: null });
+                this.accountMenu = new MultiplayerMenu({
+                    onSession: (session) => {
+                        this.ownerSession = session;
+                        this.multiplayer.myName = session.username.slice(0, 14);
+                        const accountButton = document.getElementById('old-menu-account');
+                        if (accountButton) accountButton.textContent = `Account: ${session.username}`;
+                        if (this.admin._isOwner()) this.admin.write('Admin access granted for this account.', 'system');
+                    },
+                });
 
                 // PBR Textures & Materials
                 this.wallMaps = TextureFactory.createWallpaperMaps(false);
@@ -1611,7 +1623,7 @@ import './ui/admin-terminal.css';
                 this.updateHUD();
                 this.updateInventoryUI();
 
-                this.activeRooms.forEach(r => this.scene.remove(r.group));
+                this.activeRooms.forEach((room) => this.disposeRoomResources(room));
                 this.activeRooms = [];
                 this.buildRoom(startRoom, new THREE.Vector3(0, 0, startOriginZ));
                 this.playerPos.set(0, 1.7, startOriginZ - 2.5);
@@ -1774,6 +1786,24 @@ import './ui/admin-terminal.css';
             /*******************************************************************
              * 7. DETERMINISTIC HD 3D HOTEL ROOM GENERATOR (CO-OP SYNCED)
              *******************************************************************/
+            disposeRoomResources(room) {
+                if (!room?.group) return;
+                const geometries = new Set();
+                const materials = new Set();
+                room.group.traverse((object) => {
+                    if (object.geometry) geometries.add(object.geometry);
+                    const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+                    objectMaterials.forEach((material) => { if (material) materials.add(material); });
+                });
+
+                this.scene.remove(room.group);
+                geometries.forEach((geometry) => geometry.dispose());
+                const sharedMaterials = new Set([this.brassMat, this.woodMat, this.darkWoodMat]);
+                materials.forEach((material) => {
+                    if (!sharedMaterials.has(material)) material.dispose();
+                });
+            }
+
             buildRoom(roomNum, originVec) {
                 const { rng, roomType, subtitle, width, length, height } = window.LegacyRoomGeneration.createRoomPlan(roomNum, this.sessionSeed);
                 const group = new THREE.Group();
@@ -2101,7 +2131,7 @@ import './ui/admin-terminal.css';
                 this.activeRooms.push(roomObj);
                 if (this.activeRooms.length > 2) {
                     const old = this.activeRooms.shift();
-                    this.scene.remove(old.group);
+                    this.disposeRoomResources(old);
                 }
 
                 this.currentRoomData = roomObj;
@@ -2228,6 +2258,9 @@ import './ui/admin-terminal.css';
                 this.updateLibraryHUD();
 
                 const bookColors = [0x7c2d12, 0x1e3a8a, 0x14532d, 0x581c87, 0x78350f];
+                const bookMaterials = bookColors.map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.75 }));
+                const bookGeometry = new THREE.BoxGeometry(0.28, 0.42, 0.14);
+                const bookInstances = bookMaterials.map(() => []);
                 [
                     { x: -4.8, z: -7 }, { x: 4.8, z: -7 },
                     { x: -4.8, z: -14 }, { x: 4.8, z: -14 },
@@ -2239,15 +2272,17 @@ import './ui/admin-terminal.css';
                     frame.position.y = 1.9;
                     shelfGroup.add(frame);
 
+                    group.add(shelfGroup);
+
                     for (let row = 0; row < 4; row++) {
                         for (let b = -1.6; b <= 1.6; b += 0.42) {
-                            const bMat = new THREE.MeshStandardMaterial({ color: bookColors[(idx + row + Math.abs(Math.floor(b * 3))) % bookColors.length], roughness: 0.75 });
-                            const decBook = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.42, 0.14), bMat);
-                            decBook.position.set(sc.x < 0 ? 1.05 : -1.05, 0.65 + row * 0.8, b);
-                            shelfGroup.add(decBook);
+                            const paletteIndex = (idx + row + Math.abs(Math.floor(b * 3))) % bookColors.length;
+                            const transform = new THREE.Object3D();
+                            transform.position.set(sc.x + (sc.x < 0 ? 1.05 : -1.05), 0.65 + row * 0.8, sc.z + b);
+                            transform.updateMatrix();
+                            bookInstances[paletteIndex].push(transform.matrix.clone());
                         }
                     }
-                    group.add(shelfGroup);
 
                     const bookMesh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.2), new THREE.MeshBasicMaterial({ color: 0x4fd1ff }));
                     const bx = sc.x + (sc.x < 0 ? 1.25 : -1.25);
@@ -2276,6 +2311,14 @@ import './ui/admin-terminal.css';
                             if (this.booksFound >= 5) this.showBanner('🔓 All 5 Security Books found! Sneak to Door 051!');
                         }
                     });
+                });
+
+                bookInstances.forEach((matrices, paletteIndex) => {
+                    if (!matrices.length) return;
+                    const books = new THREE.InstancedMesh(bookGeometry, bookMaterials[paletteIndex], matrices.length);
+                    matrices.forEach((matrix, index) => books.setMatrixAt(index, matrix));
+                    books.instanceMatrix.needsUpdate = true;
+                    group.add(books);
                 });
 
                 this.spawnFigure(originVec, length);
@@ -2469,7 +2512,7 @@ import './ui/admin-terminal.css';
                 if (!Number.isInteger(target) || target < 0 || target > 100) return false;
                 this.clearAllEntities();
                 this.entityHazard = null;
-                for (const room of this.activeRooms) this.scene.remove(room.group);
+                for (const room of this.activeRooms) this.disposeRoomResources(room);
                 this.activeRooms = [];
                 this.currentRoomNum = target;
                 this.updateHUD();
@@ -2802,14 +2845,7 @@ import './ui/admin-terminal.css';
                 if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
                 else document.exitFullscreen?.();
             });
-            document.getElementById('old-menu-account')?.addEventListener('click', () => openModal('account-modal'));
-            document.getElementById('close-account-modal')?.addEventListener('click', () => closeModal('account-modal'));
-            document.getElementById('account-form')?.addEventListener('submit', (event) => {
-                event.preventDefault();
-                const name = document.getElementById('account-name').value.trim().slice(0, 14) || 'Explorer';
-                document.getElementById('coop-player-name').value = name;
-                document.getElementById('account-status').textContent = 'Profile saved for this session.';
-            });
+            document.getElementById('old-menu-account')?.addEventListener('click', () => window.doorsGame?.accountMenu?.open());
 
             try {
                 if (typeof THREE === 'undefined') throw new Error('Three.js did not load');

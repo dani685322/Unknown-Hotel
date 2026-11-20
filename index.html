@@ -133,7 +133,7 @@
         .old-menu-screen[hidden],
         .old-menu-screen.hidden,
         .hidden { display: none !important; }
-        #coop-modal, #options-modal, #account-modal {
+        #coop-modal, #options-modal {
             z-index: 100 !important;
             background: rgba(4, 3, 3, 0.94);
         }
@@ -548,7 +548,7 @@
             </div>
             <p class="old-menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl/C crouch <span>·</span> E interact <span>·</span> / owner terminal</p>
             <p id="game-start-status" role="status" aria-live="polite" hidden></p>
-            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> UPDATE 1.0.1.10 <span>·</span> LOCAL BETA</p>
+            <p class="old-menu-version">UNKNOWN HOTEL <span>·</span> APP VERSION 2 <span>·</span> UPDATE 1.0.2.1 <span>·</span> LOCAL BETA</p>
         </div>
         <div class="old-menu-edge">NO VACANCY — SINCE 1978</div>
     </div>
@@ -565,21 +565,6 @@
                 <label class="flex items-center justify-between gap-4"><span>Fullscreen</span><button id="options-fullscreen" type="button" class="border border-amber-700/60 bg-black px-3 py-2 text-xs">Enter fullscreen</button></label>
                 <div class="border-t border-amber-900/60 pt-4 text-xs text-neutral-400">WASD: Move &middot; Mouse: Look &middot; Shift: Sprint &middot; Ctrl/C: Crouch &middot; E: Interact</div>
             </div>
-        </div>
-    </div>
-
-    <!-- ACCOUNT MODAL -->
-    <div id="account-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 hidden">
-        <div class="w-full max-w-md border border-amber-700/70 bg-neutral-950 p-6 text-amber-100 shadow-2xl">
-            <div class="flex items-center justify-between border-b border-amber-900/60 pb-3 mb-4">
-                <h2 class="font-hotel text-xl text-amber-300">Guest Account</h2>
-                <button id="close-account-modal" type="button" class="px-2 text-lg text-amber-300" aria-label="Close account">&times;</button>
-            </div>
-            <form id="account-form" class="space-y-4">
-                <label class="block text-xs uppercase tracking-wider">Display name<input id="account-name" type="text" maxlength="14" value="Explorer" class="mt-2 w-full border border-amber-800/70 bg-black px-3 py-3 text-amber-100" autocomplete="nickname"></label>
-                <button type="submit" class="w-full border border-amber-600 bg-amber-900/80 px-4 py-3 text-sm font-bold">Save profile</button>
-                <p id="account-status" class="min-h-5 text-xs text-emerald-300"></p>
-            </form>
         </div>
     </div>
 
