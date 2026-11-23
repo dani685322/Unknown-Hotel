@@ -1,6 +1,6 @@
 // src/world/Room.js — Phase 5: geometry builder for one generated room descriptor
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './roomGen.js';
 import { createRoomMaterials } from './surfaceMaterials.js';
 

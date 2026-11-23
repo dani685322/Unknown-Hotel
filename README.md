@@ -74,17 +74,17 @@ If the project is already downloaded, open its folder in VS Code and skip the cl
 
 ### 2. Start the game
 
-Start both the browser app and multiplayer backend with one command:
+Start the browser app and multiplayer backend together with one command:
 
 ```bash
-npm run dev:all
+npm run dev
 ```
 
 Keep the terminal open while playing. This command starts:
 
-- The game in Vite on `http://localhost:5173`.
+- The game in Vite on `http://localhost:5173` (the only browser-facing game port).
 - The API and WebSocket server on `http://localhost:8080`.
-- `/api` and `/ws` browser connections through port `5173`.
+- `/api` and `/ws` requests proxied internally through port `5173`.
 
 Open [http://localhost:5173](http://localhost:5173) in the browser. For GitHub Codespaces or another forwarded environment, open the forwarded HTTPS address for port `5173`, not a direct `localhost:8080` address.
 
@@ -112,10 +112,10 @@ Refresh both browser tabs after restarting the backend or applying source change
 
 ### Start the services separately
 
-Start only the browser app:
+Start only the browser app (authentication and multiplayer need the backend):
 
 ```bash
-npm run dev
+npm run dev:frontend
 ```
 
 Start only the API and WebSocket backend:
@@ -174,12 +174,19 @@ Use this format:
 - Added or changed behavior.
 - Fixed bug or clarified a limitation.
 - Validation performed, when useful.
-- For update format, include the version number like this for example: `### 1.0.1.9 goes to 1.0.2.0 and that will be named the app Version 2 of the (title)###`
+- For update format, include the version number like this for example: `### 1.0.1.9 goes to 1.0.2.0 and that will be named the app Version 2 of the (title) ###`
 ```
 
 Do not remove old entries. Keep entries concise and describe what the player can now do or what changed behaviorally.
 
 ## Updates
+
+### 1.0.2.2 - Restore trusted launcher and fix development startup
+
+- Keep `index.html` on the saved update 1.0.2.1 game instead of the remote iframe launcher.
+- Use the Three.js 0.128-compatible BufferGeometryUtils import so Vite can optimize dependencies.
+- Make `npm run dev` start both Vite on port 5173 and the authentication backend; the signed-in owner username `HuNao` is already listed in `UsernameAdmin.js`.
+- Validation: production build, source syntax checks, module transform on port 5173, and working directory comparison to the saved update.
 
 ### 1.0.2.1 - Fix Door 050 freeze and gate Admin by account
 
