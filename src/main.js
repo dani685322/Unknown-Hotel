@@ -1,79 +1,20 @@
-// src/main.js — renderer and runtime bootstrap
-import * as THREE from 'three';
-import { Input } from './core/input.js';
-import { Player } from './player/Player.js';
-import { Run } from './game/Run.js';
+// Entry point for the page in index.html. The catalog stays lightweight; the
+// Three.js runtime is loaded only after a player opens a game view.
+const isPlayView = new URLSearchParams(location.search).get('play') === '1';
+const requestedGame = new URLSearchParams(location.search).get('game') || 'unknown-halls';
+document.body.classList.toggle('platform-view', !isPlayView);
+document.body.classList.toggle('creator-view', isPlayView && requestedGame !== 'unknown-halls');
 
-const app = document.getElementById('app');
-const hud = document.getElementById('hud');
-
-// ---------------------------------------------------------------- renderer
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.9;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-app.appendChild(renderer.domElement);
-
-// ------------------------------------------------------------------- scene
-const scene = new THREE.Scene();
-
-// ------------------------------------------------------------------ camera
-const FOV = 72;
-const camera = new THREE.PerspectiveCamera(
-  FOV, window.innerWidth / window.innerHeight, 0.05, 200
-);
-camera.rotation.order = 'YXZ';
-camera.position.set(0, 1.65, 8);
-
-// ----------------------------------------------------------------- player
-const input = new Input(renderer.domElement);
-const player = new Player();
-const game = new Run({
-  scene,
-  renderer,
-  input,
-  player,
-  camera,
-  hud,
-  prompt: document.getElementById('prompt'),
-  reticle: document.getElementById('reticle'),
-});
-
-// ------------------------------------------------------------------- loop
-const clock = new THREE.Clock();
-
-function tick() {
-  requestAnimationFrame(tick);
-
-  const elapsed = clock.getDelta();
-  game.updateStats(elapsed);
-  const dt = Math.min(elapsed, 0.1);
-  game.update(dt);
-
-  if (game.state === 'spectator') {
-    game.updateSpectatorCamera(camera);
+if (isPlayView) {
+  if (requestedGame === 'unknown-halls') {
+    import('./legacyGame.js');
   } else {
-    camera.position.copy(player.eyePosition);
-    camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+    import('./ui/CreatorGameView.js').then(({ default: CreatorGameView }) => {
+      new CreatorGameView(document.getElementById('platform-shell'), requestedGame);
+    });
   }
-
-  game.updateHUD();
-  input.clearOneShots();
-
-  renderer.render(scene, camera);
+} else {
+  import('./ui/PlatformShell.js').then(({ default: PlatformShell }) => {
+    new PlatformShell(document.getElementById('platform-shell'));
+  });
 }
-
-// ---------------------------------------------------------------- resizing
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-tick();
-
-export { scene, camera, renderer, input, player };
