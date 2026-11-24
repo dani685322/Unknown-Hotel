@@ -30,7 +30,7 @@ export class PartyChat {
       const shouldOpen = (event.code === 'KeyT' || event.code === 'Enter')
         && !event.repeat
         && !this.opened
-        && document.pointerLockElement;
+        && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
       if (shouldOpen && !this.game.admin?.opened) {
         event.preventDefault();
         event.stopPropagation();
@@ -58,6 +58,10 @@ export class PartyChat {
   send() {
     const text = this.input.value.trim();
     if (!text) return;
+    if (text.toLowerCase() === '/close chat') {
+      this.close();
+      return;
+    }
     const socket = this.game.multiplayer?.ws;
     if (!socket?.socket || socket.socket.readyState !== WebSocket.OPEN) {
       this.receive({ username: 'System', text: 'Connect to the party server first.' });

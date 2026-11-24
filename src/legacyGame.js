@@ -1212,7 +1212,7 @@ import './ui/admin-terminal.css';
                 // Three.js Scene + ACES Filmic Tone Mapping + Shadows
                 this.scene = new THREE.Scene();
                 this.scene.background = new THREE.Color(0x040202);
-                this.scene.fog = new THREE.FogExp2(0x070404, 0.042);
+                this.scene.fog = new THREE.FogExp2(0x030203, 0.068);
 
                 this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.08, 95);
                 this.scene.add(this.camera);
@@ -1222,7 +1222,7 @@ import './ui/admin-terminal.css';
                 this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
                 this.renderer.outputEncoding = THREE.sRGBEncoding;
                 this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                this.renderer.toneMappingExposure = 1.08;
+                this.renderer.toneMappingExposure = 0.82;
                 this.renderer.shadowMap.enabled = true;
                 this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -1305,12 +1305,14 @@ import './ui/admin-terminal.css';
                 this.inventory = [];
                 this.selectedSlot = 0;
                 this.itemLightOn = false;
+                this.userOverrodeTouchUI = false;
+                this.touchUIVisible = false;
 
                 // Dynamic Held Tool Lights
-                this.playerPointLight = new THREE.PointLight(0xffa43d, 0, 15, 1.6);
+                this.playerPointLight = new THREE.PointLight(0xff7b29, 0, 9.5, 1.6);
                 this.scene.add(this.playerPointLight);
 
-                this.playerSpotLight = new THREE.SpotLight(0xfff7e2, 0, 32, Math.PI / 5.2, 0.45, 1.2);
+                this.playerSpotLight = new THREE.SpotLight(0xfff5d6, 0, 28, Math.PI / 6.5, 0.68, 1.3);
                 this.playerSpotLight.castShadow = true;
                 this.playerSpotLight.shadow.mapSize.set(512, 512);
                 this.playerSpotTarget = new THREE.Object3D();
@@ -1346,6 +1348,7 @@ import './ui/admin-terminal.css';
                 this.statsFrames = 0;
                 this.statsElapsed = 0;
                 this.setupEventListeners();
+                this.detectMobileOrSmallScreen();
                 this.updateInventoryUI();
                 this.animate();
             }
@@ -1365,12 +1368,38 @@ import './ui/admin-terminal.css';
                 this.scene.add(this.dustPoints);
             }
 
+            setTouchUIVisible(visible) {
+                this.touchUIVisible = Boolean(visible);
+                const wrapper = document.getElementById('mobile-controls-wrapper');
+                if (wrapper) wrapper.classList.toggle('hidden', !this.touchUIVisible);
+            }
+
+            detectMobileOrSmallScreen() {
+                const hasTouchPoints = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+                const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+                const noHover = window.matchMedia?.('(hover: none)').matches ?? false;
+                const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                const width = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth);
+                const height = Math.min(window.innerHeight, document.documentElement.clientHeight || window.innerHeight);
+                const phoneSized = width <= 920 || (coarse && Math.max(width, height) <= 1024);
+                if (!this.userOverrodeTouchUI) this.setTouchUIVisible((hasTouchPoints && (coarse || noHover || mobileUA)) || phoneSized);
+            }
+
             setupEventListeners() {
-                window.addEventListener('resize', () => {
+                const handleViewportResize = () => {
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
                     this.composer?.setSize(window.innerWidth, window.innerHeight);
+                    this.detectMobileOrSmallScreen();
+                };
+                window.addEventListener('resize', handleViewportResize);
+                window.addEventListener('orientationchange', handleViewportResize);
+
+                const touchToggle = document.getElementById('btn-touch-toggle');
+                touchToggle?.addEventListener('click', () => {
+                    this.userOverrodeTouchUI = true;
+                    this.setTouchUIVisible(!this.touchUIVisible);
                 });
 
                 document.getElementById('btn-gfx-toggle').addEventListener('click', () => {
@@ -1455,6 +1484,34 @@ import './ui/admin-terminal.css';
                 this.canvas.addEventListener('touchend', endTouchLook);
                 this.canvas.addEventListener('touchcancel', endTouchLook);
 
+                // In-game party chat: press T, then type /close chat to close it.
+                window.addEventListener('keydown', (e) => {
+                    if (e.code !== 'KeyT' || e.repeat || !this.isAlive || this.chatInputOverlay) return;
+                    if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+                    e.preventDefault();
+                    const overlay = document.createElement('form');
+                    overlay.id = 'legacy-chat-overlay';
+                    overlay.innerHTML = '<input maxlength="120" autocomplete="off" placeholder="Type a message… ( /close chat )" aria-label="Party chat">';
+                    document.body.appendChild(overlay);
+                    this.chatInputOverlay = overlay;
+                    const input = overlay.querySelector('input');
+                    input.focus();
+                    const close = () => { overlay.remove(); this.chatInputOverlay = null; };
+                    overlay.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        const text = input.value.trim();
+                        if (text.toLowerCase() !== '/close chat' && text) this.multiplayer.sendChat(text);
+                        close();
+                    });
+                    input.addEventListener('keydown', (event) => {
+                        event.stopPropagation();
+                        if (event.code === 'Escape' || (event.code === 'Enter' && input.value.trim().toLowerCase() === '/close chat')) {
+                            event.preventDefault();
+                            close();
+                        }
+                    });
+                }, true);
+
                 // Keyboard Controls (ignore while typing in chat/name inputs)
                 window.addEventListener('keydown', (e) => {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
@@ -1523,7 +1580,10 @@ import './ui/admin-terminal.css';
                     if (document.pointerLockElement) document.exitPointerLock();
                     coopModal.classList.remove('hidden');
                 };
-                document.getElementById('btn-open-coop-start').addEventListener('click', openCoop);
+                document.getElementById('btn-open-coop-start').addEventListener('click', () => {
+                    if (document.pointerLockElement) document.exitPointerLock();
+                    this.accountMenu.open();
+                });
                 document.getElementById('btn-coop-toggle').addEventListener('click', openCoop);
                 document.getElementById('close-coop-modal').addEventListener('click', () => coopModal.classList.add('hidden'));
 
@@ -1627,7 +1687,7 @@ import './ui/admin-terminal.css';
                 this.activeRooms = [];
                 this.buildRoom(startRoom, new THREE.Vector3(0, 0, startOriginZ));
                 this.playerPos.set(0, 1.7, startOriginZ - 2.5);
-                this.yaw = Math.PI;
+                this.yaw = 0;
                 this.pitch = 0;
 
                 if (startRoom === 0) {
@@ -1819,16 +1879,16 @@ import './ui/admin-terminal.css';
                 const isDark = roomType === 'dark';
 
                 if (roomType === 'courtyard') {
-                    this.scene.fog.color.setHex(0x09131f); this.scene.fog.density = 0.032;
+                    this.scene.fog.color.setHex(0x050a14); this.scene.fog.density = 0.048;
                     this.dustPoints.material.color.setHex(0x93c5fd); this.dustPoints.material.size = 0.07;
                 } else if (roomType === 'seek') {
-                    this.scene.fog.color.setHex(0x1f0507); this.scene.fog.density = 0.044;
+                    this.scene.fog.color.setHex(0x120204); this.scene.fog.density = 0.055;
                     this.dustPoints.material.color.setHex(0xff5252); this.dustPoints.material.size = 0.06;
                 } else if (isDark) {
-                    this.scene.fog.color.setHex(0x020203); this.scene.fog.density = 0.075;
+                    this.scene.fog.color.setHex(0x010102); this.scene.fog.density = 0.105;
                     this.dustPoints.material.color.setHex(0x94a3b8); this.dustPoints.material.size = 0.045;
                 } else {
-                    this.scene.fog.color.setHex(0x090504); this.scene.fog.density = 0.036;
+                    this.scene.fog.color.setHex(0x030203); this.scene.fog.density = 0.068;
                     this.dustPoints.material.color.setHex(0xffd89e); this.dustPoints.material.size = 0.055;
                 }
 
@@ -1946,14 +2006,14 @@ import './ui/admin-terminal.css';
                         chandGroup.position.set(0, height - 0.1, lz);
                         group.add(chandGroup);
 
-                        const pLight = new THREE.PointLight(roomType === 'seek' ? 0xff2e3b : 0xffb35c, roomType === 'seek' ? 1.5 : 1.25, 23, 1.5);
+                        const pLight = new THREE.PointLight(roomType === 'seek' ? 0xff2e3b : 0xe89b48, roomType === 'seek' ? 1.15 : 0.52, 16, 1.8);
                         pLight.position.set(0, height - 1.0, lz);
                         if (i === 0 && this.highQuality) {
                             pLight.castShadow = true;
                             pLight.shadow.mapSize.set(512, 512);
                         }
                         group.add(pLight);
-                        roomLights.push({ light: pLight, group: chandGroup });
+                        roomLights.push({ light: pLight, baseIntensity: pLight.intensity, group: chandGroup });
                     }
                 }
 
@@ -2695,8 +2755,8 @@ import './ui/admin-terminal.css';
                         forward /= length;
                         const sin = Math.sin(this.yaw);
                         const cos = Math.cos(this.yaw);
-                        const dx = (sin * forward + cos * strafe) * baseSpeed * mag * dt;
-                        const dz = (cos * forward - sin * strafe) * baseSpeed * mag * dt;
+                        const dx = (-sin * forward + cos * strafe) * baseSpeed * mag * dt;
+                        const dz = (-cos * forward - sin * strafe) * baseSpeed * mag * dt;
                         this.playerPos.x += dx;
                         this.playerPos.z += dz;
                         this.walkBobTimer += dt * (this.isCrouching ? 6.5 : 11.2) * mag;
@@ -2722,11 +2782,16 @@ import './ui/admin-terminal.css';
                 const bobOffset = this.isHiding ? 0 : Math.sin(this.walkBobTimer) * 0.055;
                 this.camera.position.set(this.playerPos.x + shakeX, targetHeight + bobOffset + shakeY, this.playerPos.z);
 
-                const lookDir = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
+                const lookDir = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)).normalize();
                 this.camera.lookAt(this.camera.position.clone().add(lookDir));
 
                 // 3D Viewmodel & Lights
                 const equipped = this.inventory[this.selectedSlot];
+                this.currentRoomData.roomLights?.forEach((entry, index) => {
+                    const base = entry.baseIntensity ?? entry.light.intensity;
+                    entry.baseIntensity = base;
+                    entry.light.intensity = base * (0.92 + Math.sin(elapsed * 37 + index) * 0.05 + (Math.random() < 0.015 ? -0.35 : 0));
+                });
                 this.viewmodel.update(equipped, this.itemLightOn, this.isHiding, elapsed, this.walkBobTimer);
 
                 this.playerPointLight.intensity = 0;
@@ -2833,7 +2898,7 @@ import './ui/admin-terminal.css';
             });
             document.getElementById('btn-open-coop-start')?.addEventListener('click', () => {
                 window.doorsGame?.sound?.init();
-                openModal('coop-modal');
+                window.doorsGame?.accountMenu?.open();
             });
             document.getElementById('old-menu-options')?.addEventListener('click', () => openModal('options-modal'));
             document.getElementById('close-options-modal')?.addEventListener('click', () => closeModal('options-modal'));

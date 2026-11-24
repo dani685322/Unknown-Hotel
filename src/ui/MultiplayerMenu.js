@@ -139,30 +139,26 @@ export class MultiplayerMenu {
   renderLobby(message = '') {
     this.root.innerHTML = `
       <div class="multiplayer-panel">
-        <p class="multiplayer-eyebrow">BETA / LOCAL LOBBY</p>
-        <h2>${escapeHtml(this.account)}</h2>
-        <label class="multiplayer-server">WebSocket server<input id="beta-server" value="${escapeHtml(this.getServerUrl())}" placeholder="wss://server.example.com"></label>
-        <div class="multiplayer-status"><b>Lobby status</b><span id="beta-status">Disconnected</span></div>
-        <div class="party-tools">
-          <label>Party name<input id="party-name" maxlength="30" value="${escapeHtml(`${this.account}'s party`)}"></label>
-          <label>Visibility<select id="party-visibility"><option value="public">Public</option><option value="private">Private</option></select></label>
-          <label>Difficulty<select id="party-difficulty"><option value="Easy">Easy</option><option value="Normal" selected>Normal</option><option value="Hard">Hard</option><option value="Extreme">Extreme</option><option value="Hell">Hell</option></select></label>
-          <button type="button" id="party-create">Create Party</button>
-          <label>Join by code<input id="party-code" maxlength="6" placeholder="ABC123"></label>
-          <button type="button" id="party-join">Join Party</button>
-        </div>
+        <p class="multiplayer-eyebrow">UNKNOWN HOTEL</p>
+        <h2>Multiplayer</h2>
+        <label class="lobby-nickname">Nickname<input id="party-nickname" maxlength="24" value="${escapeHtml(this.account ?? '')}" placeholder="your name"></label>
+        <h3>Create party</h3>
+        <label class="public-check"><input id="party-public" type="checkbox" checked> <span>Public party</span> <small>(shown in the list below)</small></label>
+        <label class="lobby-difficulty">Difficulty<select id="party-difficulty"><option value="Easy">Easy</option><option value="Normal" selected>Normal</option><option value="Hard">Hard</option><option value="Extreme">Extreme</option><option value="Hell">Hell</option></select></label>
+        <button type="button" id="party-create" class="lobby-create">Create party</button>
+        <p class="lobby-or">or pick a public party</p>
         <div class="public-parties" id="public-parties"></div>
+        <button type="button" id="party-refresh" class="lobby-refresh">Refresh</button>
+        <p class="lobby-or">or join with a code</p>
+        <div class="code-join"><input id="party-code" maxlength="6" placeholder="CODE"><button type="button" id="party-join">Join</button></div>
+        <div class="multiplayer-status"><b>Lobby</b><span id="beta-status">Disconnected</span></div>
         <div class="multiplayer-player-list" id="beta-player-list"></div>
         <p class="multiplayer-message">${escapeHtml(message)}</p>
-        <div class="multiplayer-actions">
-          <button type="button" id="beta-connect">Connect</button>
-          <button type="button" id="beta-download">Download account file</button>
-          <button type="button" id="beta-close" class="secondary">Back</button>
-        </div>
+        <button type="button" id="beta-close" class="lobby-back">Back ›</button>
+        <label class="multiplayer-server"><input id="beta-server" value="${escapeHtml(this.getServerUrl())}" aria-label="WebSocket server" hidden></label>
       </div>`;
     this.root.querySelector('#beta-close').addEventListener('click', () => this.close());
-    this.root.querySelector('#beta-download').addEventListener('click', () => this.downloadAccounts());
-    this.root.querySelector('#beta-connect').addEventListener('click', () => this.connectLobby());
+    this.root.querySelector('#party-refresh').addEventListener('click', () => this.refreshPublicParties());
     this.root.querySelector('#party-create').addEventListener('click', () => this.createParty());
     this.root.querySelector('#party-join').addEventListener('click', () => this.joinParty());
     this.updatePlayerList();
@@ -189,12 +185,17 @@ export class MultiplayerMenu {
     }
     localStorage.setItem(SERVER_KEY, url);
     this.ws?.disconnect();
+    let connectionError = false;
     this.setLobbyStatus('Connecting...', 'pending');
     this.ws = new WebSocketClient({
       url,
       username: this.account,
       token: this.session?.token,
       onOpen: () => {
+        this.setLobbyStatus('Authenticating...', 'pending');
+      },
+      onJoined: () => {
+        connectionError = false;
         this.setLobbyStatus('Connected', 'ok');
         if (this.pendingPartyCode) {
           const code = this.pendingPartyCode;
@@ -203,9 +204,15 @@ export class MultiplayerMenu {
           this.ws.joinParty(code);
         }
       },
-      onClose: () => this.setLobbyStatus('Disconnected', 'error'),
-      onError: (message) => this.setLobbyStatus(message, 'error'),
+      onClose: () => {
+        if (!connectionError) this.setLobbyStatus('Disconnected', 'error');
+      },
+      onError: (message) => {
+        connectionError = true;
+        this.setLobbyStatus(message, 'error');
+      },
       onMessage: (message) => this.onChat?.(message),
+      onGameChat: (message) => this.onChat?.(message),
       onParty: (party) => {
         this.party = party;
         this.updatePartyView();
@@ -243,10 +250,21 @@ export class MultiplayerMenu {
     this.ws.connect();
   }
 
+  refreshPublicParties() {
+    const state = this.ws?.socket?.readyState;
+    if (state === WebSocket.OPEN) {
+      this.ws.listPublicParties();
+      return;
+    }
+    if (state !== WebSocket.CONNECTING) this.connectLobby();
+  }
+
   createParty() {
-    const name = this.root.querySelector('#party-name')?.value;
-    const visibility = this.root.querySelector('#party-visibility')?.value;
+    const nickname = this.root.querySelector('#party-nickname')?.value.trim();
+    const name = `${nickname || 'Explorer'}'s party`;
+    const visibility = this.root.querySelector('#party-public')?.checked ? 'public' : 'private';
     const difficulty = this.root.querySelector('#party-difficulty')?.value ?? 'Normal';
+    if (nickname) this.account = nickname.slice(0, 24);
     if (!this.ws?.socket || this.ws.socket.readyState !== WebSocket.OPEN) {
       this.setLobbyStatus('Connect to the server first.', 'error');
       return;

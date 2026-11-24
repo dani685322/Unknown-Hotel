@@ -1,6 +1,6 @@
 # Unknown Hotel
 
-A procedural horror-survival game built with Three.js and an authoritative Node.js WebSocket server. Explore 100 changing rooms, avoid entities, manage supplies, and play with friends through public or private parties.
+A procedural horror-survival game and creator platform built with Three.js and an authoritative Node.js WebSocket server. Discover Unknown Halls, explore 100 changing rooms, avoid entities, manage supplies, build safe JSON scenes, and play with friends.
 
 ## Features
 
@@ -12,6 +12,9 @@ A procedural horror-survival game built with Three.js and an authoritative Node.
 - Rush and Ambush encounters with hide warnings and spectator mode.
 - Owner-only Admin terminal with runtime commands.
 - Lockers, crouching, sprinting, loot, medkits, lamps, doors, and hiding spots.
+- Roblox-inspired original discovery launcher with new-tab game sessions.
+- Owner-approved Creator Studio scene submissions with no executable uploads.
+- Persistent game listings, verified visits, friends, moderated game chat, and original cosmetics.
 
 ## Controls
 
@@ -93,7 +96,7 @@ To stop the servers, press `Ctrl+C` in the terminal running `dev:all`. Restart w
 ### 3. Start a single-player run
 
 1. Open `http://localhost:5173`.
-2. Select **Enter the hotel** from the title screen.
+2. Select **Play** on the Unknown Halls discovery card; the hotel opens in a new tab.
 3. Use the mouse to look and `W A S D` to move.
 4. Press `E` to interact with doors and lockers.
 5. Reach and unlock the next door to progress through the run.
@@ -180,6 +183,13 @@ Use this format:
 Do not remove old entries. Keep entries concise and describe what the player can now do or what changed behaviorally.
 
 ## Updates
+
+### 1.0.2.3 - Unknown Halls platform MVP
+
+- Add an original game-discovery launcher and `about:blank` play-tab host while loading Three.js only for `?play=1` sessions.
+- Add SQLite-backed published games, owner approval, verified daily visits, friends, earned-coin cosmetics, inventory, and moderated game chat APIs.
+- Add Creator Studio safe scene JSON validation and an owner approval queue; executable scripts and uploaded web games remain blocked.
+- Validation: production build, source syntax checks, API smoke tests, and launcher/play-view browser checks.
 
 ### 1.0.2.2 - Restore trusted launcher and fix development startup
 

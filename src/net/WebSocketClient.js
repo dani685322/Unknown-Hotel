@@ -1,15 +1,18 @@
 export class WebSocketClient {
-  constructor({ url, username, token, onOpen, onClose, onError, onPlayers, onParty, onPublicParties, onMessage, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
+  constructor({ url, username, token, gameSlug = 'unknown-halls', onOpen, onClose, onError, onJoined, onPlayers, onParty, onPublicParties, onMessage, onGameChat, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
     this.url = url;
     this.username = username;
     this.token = token;
+    this.gameSlug = gameSlug;
     this.onOpen = onOpen;
     this.onClose = onClose;
     this.onError = onError;
+    this.onJoined = onJoined;
     this.onPlayers = onPlayers;
     this.onParty = onParty;
     this.onPublicParties = onPublicParties;
     this.onMessage = onMessage;
+    this.onGameChat = onGameChat;
     this.onModeration = onModeration;
     this.onPlayerState = onPlayerState;
     this.onPartyLeft = onPartyLeft;
@@ -18,10 +21,14 @@ export class WebSocketClient {
     this.onRoomState = onRoomState;
     this.onRoleUpdated = onRoleUpdated;
     this.socket = null;
+    this.connectionTimeout = null;
+    this.authenticated = false;
   }
 
   connect() {
     if (this.socket && [WebSocket.CONNECTING, WebSocket.OPEN].includes(this.socket.readyState)) return false;
+    clearTimeout(this.connectionTimeout);
+    this.authenticated = false;
     try {
       this.socket = new WebSocket(this.url);
     } catch (error) {
@@ -31,10 +38,11 @@ export class WebSocketClient {
     const socket = this.socket;
     socket.addEventListener('open', () => {
       if (this.socket !== socket) return;
-      this.send({ type: 'join', username: this.username, token: this.token, client: 'unknown-hotel-beta' });
+      this.send({ type: 'join', username: this.username, token: this.token, gameSlug: this.gameSlug, client: 'unknown-hotel-beta' });
       this.onOpen?.();
     });
     socket.addEventListener('message', (event) => {
+      if (this.socket !== socket) return;
       let message;
       try {
         message = JSON.parse(event.data);
@@ -45,6 +53,11 @@ export class WebSocketClient {
       if (!message || typeof message !== 'object' || Array.isArray(message) || typeof message.type !== 'string') {
         this.onError?.('The server sent an invalid message.');
         return;
+      }
+      if (message.type === 'joined') {
+        this.authenticated = true;
+        clearTimeout(this.connectionTimeout);
+        this.onJoined?.(message);
       }
       if (message.type === 'players') this.onPlayers?.(Array.isArray(message.players) ? message.players : []);
       if (message.type === 'party') this.onParty?.(message);
@@ -62,6 +75,7 @@ export class WebSocketClient {
       }
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
+      if (message.type === 'game_chat') this.onGameChat?.(message);
       if (message.type === 'role_updated') this.onRoleUpdated?.(message);
       if (message.type === 'player_state') this.onPlayerState?.(message);
       if (message.type === 'room_state') this.onRoomState?.(message);
@@ -69,10 +83,20 @@ export class WebSocketClient {
     });
     socket.addEventListener('close', (event) => {
       if (this.socket !== socket) return;
+      clearTimeout(this.connectionTimeout);
       this.socket = null;
+      this.authenticated = false;
       this.onClose?.(event);
     });
-    socket.addEventListener('error', () => this.onError?.('Could not connect to the WebSocket server.'));
+    socket.addEventListener('error', () => {
+      clearTimeout(this.connectionTimeout);
+      this.onError?.('Could not connect to the WebSocket server.');
+    });
+    this.connectionTimeout = setTimeout(() => {
+      if (this.socket !== socket || this.authenticated || socket.readyState === WebSocket.CLOSED) return;
+      this.onError?.('Timed out waiting for the multiplayer server.');
+      socket.close();
+    }, 10_000);
     return true;
   }
 
@@ -151,9 +175,15 @@ export class WebSocketClient {
     this.send({ type: 'chat', text });
   }
 
+  sendGameChat(text) {
+    this.send({ type: 'game_chat', text });
+  }
+
   disconnect() {
     const socket = this.socket;
     if (!socket) return;
+    clearTimeout(this.connectionTimeout);
+    this.authenticated = false;
     if (socket.readyState === WebSocket.OPEN) this.send({ type: 'leave', username: this.username });
     if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close(1000, 'Client disconnected');
   }

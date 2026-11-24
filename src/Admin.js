@@ -184,6 +184,53 @@ export class Admin {
       this.game.statsElement.hidden = !this.game.statsElement.hidden;
       return `stats ${this.game.statsElement.hidden ? 'disabled' : 'enabled'}`;
     });
+    this.register('heal', 'heal [amount]  restore vitality', (args) => {
+      const amount = args[0] === undefined ? 100 : Number(args[0]);
+      if (!Number.isFinite(amount) || amount < 0) return 'Usage: heal [amount]';
+      this.game.hp = Math.min(100, this.game.hp + amount);
+      this.game.updateHUD();
+      return `Vitality: ${Math.ceil(this.game.hp)} / 100`;
+    });
+    this.register('damage', 'damage <amount>  test damage and death effects', (args) => {
+      const amount = Number(args[0]);
+      if (!Number.isFinite(amount) || amount < 0) return 'Usage: damage <amount>';
+      this.game.damagePlayer(amount, 'Admin', 'Administrative damage test.');
+      return `Applied ${amount} damage.`;
+    });
+    this.register('gold', 'gold [amount]  add or set gold', (args) => {
+      const amount = Number(args[0]);
+      if (!Number.isFinite(amount)) return `Gold: ${this.game.gold}`;
+      this.game.gold = Math.max(0, Math.floor(amount));
+      this.game.updateHUD();
+      return `Gold: ${this.game.gold}`;
+    });
+    this.register('where', 'show current room and player coordinates', () => {
+      const p = this.game.playerPos;
+      return `Room ${String(this.game.currentRoomNum).padStart(3, '0')} · ${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}`;
+    });
+    this.register('inventory', 'list current inventory', () =>
+      this.game.inventory.length
+        ? this.game.inventory.map((item, index) => `${index + 1}. ${item.name} (${item.charges ?? 0})`).join('\n')
+        : 'Inventory is empty.');
+    this.register('give', 'give <lighter|flashlight|vitamins|lockpick|crucifix>', (args) => {
+      const id = String(args[0] ?? '').toLowerCase();
+      const items = {
+        lighter: ['Lighter', '🔥', 100], flashlight: ['Flashlight', '🔦', 100],
+        vitamins: ['Vitamins', '💊', 3], lockpick: ['Lockpick', '🗝️', 3], crucifix: ['Crucifix', '✝️', 1],
+      };
+      const item = items[id];
+      if (!item) return 'Usage: give <lighter|flashlight|vitamins|lockpick|crucifix>';
+      this.game.addItem({ id, name: item[0], icon: item[1], charges: item[2], maxCharges: item[2] });
+      return `Added ${item[0]}.`;
+    });
+    this.register('revive', 'revive the player and clear death state', () => {
+      this.game.revivePlayer();
+      return 'Player revived.';
+    });
+    this.register('restart', 'restart the current run from Reception', () => {
+      this.game.startNewRun();
+      return 'Run restarted at Reception.';
+    });
     this.register('close', 'close the developer console', () => {
       queueMicrotask(() => this.close());
       return 'Closing developer console.';

@@ -273,6 +273,16 @@
             border-radius: 0;
             background: rgba(6,7,7,.58);
         }
+        #legacy-chat-overlay {
+            position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%);
+            z-index: 120; width: min(430px, calc(100vw - 32px));
+            padding: 8px; background: rgba(0,0,0,.88); border: 1px solid rgba(245,158,11,.75);
+            box-shadow: 0 0 24px rgba(0,0,0,.7);
+        }
+        #legacy-chat-overlay input {
+            width: 100%; border: 0; outline: 0; background: transparent; color: #fff;
+            font: 14px ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
         #inventory-bar {
             gap: 5px;
         }
@@ -326,6 +336,10 @@
     </style>
 </head>
 <body>
+
+    <!-- Public game discovery and creator platform shell. The hotel runtime is
+         loaded by src/main.js only for ?play=1 views. -->
+    <div id="platform-shell"></div>
 
     <!-- Main 3D WebGL Canvas -->
     <canvas id="game-canvas"></canvas>

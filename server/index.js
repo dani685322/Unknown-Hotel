@@ -27,6 +27,86 @@ database.exec(`
     recognized_at INTEGER NOT NULL,
     UNIQUE(username, ip_address)
   );
+  CREATE TABLE IF NOT EXISTS games (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    creator_username TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    scene_json TEXT NOT NULL DEFAULT '{}',
+    thumbnail TEXT NOT NULL DEFAULT 'hotel',
+    version TEXT NOT NULL DEFAULT '1.0.0',
+    visits INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    approved_at INTEGER,
+    rejection_reason TEXT
+  );
+  CREATE TABLE IF NOT EXISTS game_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL,
+    username_key TEXT NOT NULL,
+    visit_day TEXT NOT NULL,
+    visited_at INTEGER NOT NULL,
+    UNIQUE(game_id, username_key, visit_day)
+  );
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(requester, recipient)
+  );
+  CREATE TABLE IF NOT EXISTS friendships (
+    user_a TEXT NOT NULL,
+    user_b TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY(user_a, user_b)
+  );
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS chat_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER,
+    reporter TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS chat_blocks (
+    blocker TEXT NOT NULL,
+    blocked TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY(blocker, blocked)
+  );
+  CREATE TABLE IF NOT EXISTS cosmetics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    description TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE IF NOT EXISTS inventory (
+    username TEXT NOT NULL,
+    cosmetic_id INTEGER NOT NULL,
+    equipped INTEGER NOT NULL DEFAULT 0,
+    acquired_at INTEGER NOT NULL,
+    PRIMARY KEY(username, cosmetic_id)
+  );
+  CREATE TABLE IF NOT EXISTS wallets (
+    username TEXT PRIMARY KEY,
+    coins INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
 `);
 
 const ownerUsername = process.env.OWNER_USERNAME;
@@ -46,10 +126,35 @@ if (!owner) {
     .run(ownerUsername, salt, hashPassword(ownerPassword, salt), 'owner');
 }
 
+const now = Date.now();
+database.prepare(`
+  INSERT OR IGNORE INTO games
+    (slug, title, description, creator_username, status, scene_json, thumbnail, version, visits, created_at, updated_at)
+  VALUES (?, ?, ?, ?, 'published', ?, 'hotel', '1.0.2.3', 0, ?, ?)
+`).run(
+  'unknown-halls',
+  'Unknown Halls',
+  'One hundred doors. No two rooms alike. Explore the hotel with friends and keep moving.',
+  ownerUsername,
+  JSON.stringify({ template: 'unknown-hotel', doors: 100, multiplayer: true }),
+  now,
+  now,
+);
+const cosmeticSeed = [
+  ['brass-lantern', 'Brass Lantern', 'back', 120, 'A warm light for cold corridors.'],
+  ['velvet-coat', 'Velvet Coat', 'skin', 240, 'An original hotelier-inspired outfit.'],
+  ['guiding-star', 'Guiding Star', 'badge', 500, 'A small sign that you found your way.'],
+  ['door-emote', 'Door Knock', 'emote', 80, 'A polite knock before you enter.'],
+];
+const insertCosmetic = database.prepare('INSERT OR IGNORE INTO cosmetics (slug, name, kind, price, description) VALUES (?, ?, ?, ?, ?)');
+for (const item of cosmeticSeed) insertCosmetic.run(...item);
+database.prepare('INSERT OR IGNORE INTO wallets (username, coins, updated_at) VALUES (?, 500, ?)').run(ownerUsername, now);
+
 const sessions = new Map();
 const sockets = new Set();
 const parties = new Map();
 const slurPattern = /\b(faggot|nigger|kike|chink|spic|tranny|whore)\b/gi;
+const chatRate = new WeakMap();
 
 function filterChat(text) {
   return text
@@ -152,6 +257,18 @@ function broadcastChat(socket, message) {
   if (socket.partyCode) sendParty(socket.partyCode, message);
 }
 
+function gameSockets(slug) {
+  return [...sockets].filter((candidate) => candidate.user && candidate.gameSlug === slug);
+}
+
+function broadcastGameChat(slug, message) {
+  const payload = JSON.stringify(message);
+  for (const socket of gameSockets(slug)) {
+    if (message.username && database.prepare('SELECT 1 FROM chat_blocks WHERE blocker = ? AND blocked = ?').get(socket.user.toLowerCase(), message.username.toLowerCase())) continue;
+    if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+  }
+}
+
 function requestIp(request) {
   const forwarded = String(request.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
   return forwarded || request.socket.remoteAddress || 'unknown';
@@ -170,6 +287,84 @@ function chatRole(username) {
   const user = database.prepare('SELECT role FROM users WHERE lower(username) = lower(?)').get(username);
   if (user?.role === 'owner') return 'Owner';
   return CHAT_ROLES.includes(user?.role) ? user.role : '';
+}
+
+function normalizeSlug(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+}
+
+function dayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function sessionFor(request) {
+  return authorize(request);
+}
+
+function requireSession(request, response) {
+  const session = sessionFor(request);
+  if (!session) {
+    sendJson(response, 401, { error: 'Authentication required.' });
+    return null;
+  }
+  return session;
+}
+
+function requireOwner(request, response) {
+  const session = requireSession(request, response);
+  if (!session) return null;
+  if (session.role !== 'owner') {
+    sendJson(response, 403, { error: 'Owner approval is required.' });
+    return null;
+  }
+  return session;
+}
+
+function publicGameRow(row) {
+  return {
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    creator: row.creator_username,
+    status: row.status,
+    thumbnail: row.thumbnail,
+    version: row.version,
+    visits: row.visits,
+    popular: row.visits >= 1000,
+    multiplayer: true,
+    updatedAt: row.updated_at,
+  };
+}
+
+function creatorOwnsGame(session, row) {
+  return session?.role === 'owner' || row?.creator_username.toLowerCase() === session?.username.toLowerCase();
+}
+
+function safeScene(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Scene must be a JSON object.');
+  const encoded = JSON.stringify(value);
+  if (encoded.length > 200_000) throw new Error('Scene is larger than 200 KB.');
+  const allowedTemplates = new Set(['unknown-hotel', 'empty', 'corridor']);
+  const template = value.template === undefined ? 'empty' : String(value.template);
+  if (!allowedTemplates.has(template)) throw new Error('Scene template is not approved.');
+  const arrays = ['rooms', 'meshes', 'lights', 'spawns', 'rules'];
+  for (const key of arrays) {
+    if (value[key] !== undefined && (!Array.isArray(value[key]) || value[key].length > 200)) throw new Error(`${key} must contain at most 200 entries.`);
+  }
+  if (value.scripts !== undefined) throw new Error('Executable scripts are not allowed in creator scenes.');
+  return { ...value, template };
+}
+
+function normalizedPair(first, second) {
+  return [first.toLowerCase(), second.toLowerCase()].sort();
+}
+
+function ensureWallet(username) {
+  database.prepare('INSERT OR IGNORE INTO wallets (username, coins, updated_at) VALUES (?, 250, ?)').run(username, Date.now());
+}
+
+function userExists(username) {
+  return Boolean(database.prepare('SELECT id FROM users WHERE lower(username) = lower(?)').get(username));
 }
 
 const httpServer = http.createServer(async (request, response) => {
@@ -195,6 +390,7 @@ const httpServer = http.createServer(async (request, response) => {
       const salt = crypto.randomBytes(16).toString('hex');
       database.prepare('INSERT INTO users (username, password_salt, password_hash, role) VALUES (?, ?, ?, ?)')
         .run(cleanName, salt, hashPassword(password, salt), 'user');
+      ensureWallet(cleanName);
       const token = crypto.randomBytes(32).toString('base64url');
       sessions.set(token, { username: cleanName, role: 'user' });
       rememberAccountAddress(cleanName, requestIp(request));
@@ -218,6 +414,7 @@ const httpServer = http.createServer(async (request, response) => {
       }
       const token = crypto.randomBytes(32).toString('base64url');
       sessions.set(token, { username: user.username, role: user.role });
+      ensureWallet(user.username);
       rememberAccountAddress(user.username, requestIp(request));
       return sendJson(response, 200, { token, username: user.username, role: user.role });
     } catch (error) {
@@ -231,6 +428,229 @@ const httpServer = http.createServer(async (request, response) => {
       owner: session?.role === 'owner',
       username: session?.username ?? null,
     });
+  }
+
+  if (request.url === '/api/me' && request.method === 'GET') {
+    const session = sessionFor(request);
+    if (!session) return sendJson(response, 401, { error: 'Authentication required.' });
+    ensureWallet(session.username);
+    const wallet = database.prepare('SELECT coins FROM wallets WHERE username = ?').get(session.username);
+    return sendJson(response, 200, { username: session.username, role: session.role, coins: wallet?.coins ?? 0 });
+  }
+
+  if (request.url === '/api/games' && request.method === 'GET') {
+    const search = new URL(request.url, `http://${host}`).searchParams.get('q')?.trim() ?? '';
+    const rows = search
+      ? database.prepare(`SELECT * FROM games WHERE status = 'published' AND (title LIKE ? OR description LIKE ?) ORDER BY visits DESC, updated_at DESC`).all(`%${search}%`, `%${search}%`)
+      : database.prepare("SELECT * FROM games WHERE status = 'published' ORDER BY visits DESC, updated_at DESC").all();
+    return sendJson(response, 200, { games: rows.map(publicGameRow) });
+  }
+
+  const gameMatch = request.url.match(/^\/api\/games\/([^/?]+)(?:\/(visit|submit))?$/);
+  if (gameMatch && request.method === 'GET') {
+    const slug = normalizeSlug(decodeURIComponent(gameMatch[1]));
+    const row = database.prepare("SELECT * FROM games WHERE slug = ? AND status = 'published'").get(slug);
+    if (!row) return sendJson(response, 404, { error: 'Published game not found.' });
+    let scene = {};
+    try { scene = JSON.parse(row.scene_json); } catch { /* keep a safe empty scene */ }
+    return sendJson(response, 200, { game: { ...publicGameRow(row), scene } });
+  }
+
+  if (gameMatch && gameMatch[2] === 'visit' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const slug = normalizeSlug(decodeURIComponent(gameMatch[1]));
+    const row = database.prepare("SELECT id, visits FROM games WHERE slug = ? AND status = 'published'").get(slug);
+    if (!row) return sendJson(response, 404, { error: 'Published game not found.' });
+    const result = database.prepare(`INSERT INTO game_visits (game_id, username_key, visit_day, visited_at) VALUES (?, ?, ?, ?) ON CONFLICT(game_id, username_key, visit_day) DO NOTHING`)
+      .run(row.id, session.username.toLowerCase(), dayKey(), Date.now());
+    if (result.changes > 0) database.prepare('UPDATE games SET visits = visits + 1, updated_at = ? WHERE id = ?').run(Date.now(), row.id);
+    const updated = database.prepare('SELECT visits FROM games WHERE id = ?').get(row.id);
+    return sendJson(response, 200, { counted: result.changes > 0, visits: updated.visits, popular: updated.visits >= 1000 });
+  }
+
+  if (request.url === '/api/games' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    try {
+      const body = await readJson(request);
+      const title = typeof body.title === 'string' ? body.title.trim().slice(0, 80) : '';
+      const slug = normalizeSlug(body.slug || title);
+      const description = typeof body.description === 'string' ? body.description.trim().slice(0, 500) : '';
+      if (!title || !slug) return sendJson(response, 400, { error: 'A title and valid slug are required.' });
+      const scene = safeScene(body.scene ?? { template: 'empty', rooms: [], meshes: [], lights: [], spawns: [], rules: [] });
+      const timestamp = Date.now();
+      database.prepare(`INSERT INTO games (slug, title, description, creator_username, status, scene_json, thumbnail, version, created_at, updated_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, '0.1.0', ?, ?)`)
+        .run(slug, title, description, session.username, JSON.stringify(scene), String(body.thumbnail ?? 'creator').slice(0, 24), timestamp, timestamp);
+      return sendJson(response, 201, { game: publicGameRow(database.prepare('SELECT * FROM games WHERE slug = ?').get(slug)) });
+    } catch (error) {
+      return sendJson(response, 400, { error: error.message.includes('UNIQUE') ? 'That game slug is already in use.' : error.message });
+    }
+  }
+
+  if (gameMatch && !gameMatch[2] && ['PATCH', 'PUT'].includes(request.method)) {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const slug = normalizeSlug(decodeURIComponent(gameMatch[1]));
+    const row = database.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+    if (!row || !creatorOwnsGame(session, row)) return sendJson(response, 404, { error: 'Game not found.' });
+    if (row.status === 'published' && session.role !== 'owner') return sendJson(response, 409, { error: 'Published games need an owner review before changes.' });
+    try {
+      const body = await readJson(request);
+      const title = typeof body.title === 'string' ? body.title.trim().slice(0, 80) : row.title;
+      const description = typeof body.description === 'string' ? body.description.trim().slice(0, 500) : row.description;
+      const scene = safeScene(body.scene ?? JSON.parse(row.scene_json));
+      const version = typeof body.version === 'string' && /^\d+\.\d+\.\d+$/.test(body.version) ? body.version : row.version;
+      database.prepare('UPDATE games SET title = ?, description = ?, scene_json = ?, thumbnail = ?, version = ?, status = ?, rejection_reason = NULL, updated_at = ? WHERE id = ?')
+        .run(title, description, JSON.stringify(scene), String(body.thumbnail ?? row.thumbnail).slice(0, 24), version, session.role === 'owner' ? row.status : 'draft', Date.now(), row.id);
+      return sendJson(response, 200, { game: publicGameRow(database.prepare('SELECT * FROM games WHERE id = ?').get(row.id)) });
+    } catch (error) { return sendJson(response, 400, { error: error.message }); }
+  }
+
+  if (gameMatch && gameMatch[2] === 'submit' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const slug = normalizeSlug(decodeURIComponent(gameMatch[1]));
+    const row = database.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+    if (!row || !creatorOwnsGame(session, row)) return sendJson(response, 404, { error: 'Game not found.' });
+    if (row.status === 'published' && session.role !== 'owner') return sendJson(response, 409, { error: 'Published games need an owner review before changes.' });
+    database.prepare("UPDATE games SET status = 'pending', rejection_reason = NULL, updated_at = ? WHERE id = ?").run(Date.now(), row.id);
+    return sendJson(response, 200, { status: 'pending' });
+  }
+
+  const adminGameMatch = request.url.match(/^\/api\/admin\/games\/([^/?]+)\/(approve|reject)$/);
+  if (request.url === '/api/admin/games/pending' && request.method === 'GET') {
+    if (!requireOwner(request, response)) return;
+    const rows = database.prepare("SELECT * FROM games WHERE status = 'pending' ORDER BY updated_at ASC").all();
+    return sendJson(response, 200, { games: rows.map(publicGameRow) });
+  }
+  if (adminGameMatch && request.method === 'POST') {
+    if (!requireOwner(request, response)) return;
+    const slug = normalizeSlug(decodeURIComponent(adminGameMatch[1]));
+    const row = database.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+    if (!row) return sendJson(response, 404, { error: 'Game not found.' });
+    const body = await readJson(request).catch(() => ({}));
+    if (adminGameMatch[2] === 'approve') {
+      database.prepare("UPDATE games SET status = 'published', approved_at = ?, rejection_reason = NULL, updated_at = ? WHERE id = ?").run(Date.now(), Date.now(), row.id);
+      return sendJson(response, 200, { status: 'published' });
+    }
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 300) : 'Needs changes before publishing.';
+    database.prepare("UPDATE games SET status = 'rejected', rejection_reason = ?, updated_at = ? WHERE id = ?").run(reason, Date.now(), row.id);
+    return sendJson(response, 200, { status: 'rejected', reason });
+  }
+
+  if (request.url === '/api/friends' && request.method === 'GET') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const username = session.username.toLowerCase();
+    const friends = database.prepare(`SELECT CASE WHEN lower(user_a) = ? THEN user_b ELSE user_a END AS username FROM friendships WHERE lower(user_a) = ? OR lower(user_b) = ? ORDER BY username`).all(username, username, username);
+    const incoming = database.prepare("SELECT requester AS username, 'incoming' AS direction FROM friend_requests WHERE lower(recipient) = ? AND status = 'pending'").all(username);
+    const outgoing = database.prepare("SELECT recipient AS username, 'outgoing' AS direction FROM friend_requests WHERE lower(requester) = ? AND status = 'pending'").all(username);
+    return sendJson(response, 200, { friends, requests: [...incoming, ...outgoing] });
+  }
+
+  if (request.url === '/api/friends/request' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const body = await readJson(request).catch(() => ({}));
+    const target = typeof body.username === 'string' ? body.username.trim() : '';
+    if (!target || target.toLowerCase() === session.username.toLowerCase() || !userExists(target)) return sendJson(response, 400, { error: 'Choose an existing player.' });
+    const [userA, userB] = normalizedPair(session.username, target);
+    if (database.prepare('SELECT 1 FROM friendships WHERE user_a = ? AND user_b = ?').get(userA, userB)) return sendJson(response, 409, { error: 'You are already friends.' });
+    const timestamp = Date.now();
+    try {
+      database.prepare('INSERT INTO friend_requests (requester, recipient, status, created_at, updated_at) VALUES (?, ?, \'pending\', ?, ?)').run(session.username, target, timestamp, timestamp);
+    } catch {
+      return sendJson(response, 409, { error: 'A friend request already exists.' });
+    }
+    return sendJson(response, 201, { status: 'pending' });
+  }
+
+  const friendAction = request.url.match(/^\/api\/friends\/([^/?]+)\/(accept|decline)$/);
+  if (friendAction && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const target = decodeURIComponent(friendAction[1]).trim();
+    const requestRow = database.prepare("SELECT * FROM friend_requests WHERE lower(requester) = lower(?) AND lower(recipient) = lower(?) AND status = 'pending'").get(target, session.username);
+    if (!requestRow) return sendJson(response, 404, { error: 'Pending request not found.' });
+    const timestamp = Date.now();
+    if (friendAction[2] === 'decline') database.prepare("UPDATE friend_requests SET status = 'declined', updated_at = ? WHERE id = ?").run(timestamp, requestRow.id);
+    else {
+      const [userA, userB] = normalizedPair(requestRow.requester, requestRow.recipient);
+      database.prepare('INSERT OR IGNORE INTO friendships (user_a, user_b, created_at) VALUES (?, ?, ?)').run(userA, userB, timestamp);
+      database.prepare("UPDATE friend_requests SET status = 'accepted', updated_at = ? WHERE id = ?").run(timestamp, requestRow.id);
+    }
+    return sendJson(response, 200, { status: friendAction[2] === 'accept' ? 'accepted' : 'declined' });
+  }
+
+  if (request.url === '/api/catalog' && request.method === 'GET') {
+    const cosmetics = database.prepare('SELECT slug, name, kind, price, description FROM cosmetics ORDER BY price, name').all();
+    return sendJson(response, 200, { cosmetics });
+  }
+
+  if (request.url === '/api/inventory' && request.method === 'GET') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    ensureWallet(session.username);
+    const wallet = database.prepare('SELECT coins FROM wallets WHERE username = ?').get(session.username);
+    const items = database.prepare(`SELECT c.slug, c.name, c.kind, c.description, i.equipped FROM inventory i JOIN cosmetics c ON c.id = i.cosmetic_id WHERE i.username = ? ORDER BY c.name`).all(session.username);
+    return sendJson(response, 200, { coins: wallet?.coins ?? 0, items });
+  }
+
+  if (request.url === '/api/shop/purchase' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const body = await readJson(request).catch(() => ({}));
+    const slug = normalizeSlug(body.slug);
+    const cosmetic = database.prepare('SELECT * FROM cosmetics WHERE slug = ?').get(slug);
+    if (!cosmetic) return sendJson(response, 404, { error: 'Cosmetic not found.' });
+    ensureWallet(session.username);
+    if (database.prepare('SELECT 1 FROM inventory WHERE username = ? AND cosmetic_id = ?').get(session.username, cosmetic.id)) return sendJson(response, 409, { error: 'Already owned.' });
+    const wallet = database.prepare('SELECT coins FROM wallets WHERE username = ?').get(session.username);
+    if ((wallet?.coins ?? 0) < cosmetic.price) return sendJson(response, 400, { error: 'Not enough coins.' });
+    const timestamp = Date.now();
+    database.prepare('UPDATE wallets SET coins = coins - ?, updated_at = ? WHERE username = ?').run(cosmetic.price, timestamp, session.username);
+    database.prepare('INSERT INTO inventory (username, cosmetic_id, acquired_at) VALUES (?, ?, ?)').run(session.username, cosmetic.id, timestamp);
+    return sendJson(response, 201, { purchased: cosmetic.slug, coins: wallet.coins - cosmetic.price });
+  }
+
+  if (request.url === '/api/shop/equip' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const body = await readJson(request).catch(() => ({}));
+    const slug = normalizeSlug(body.slug);
+    const cosmetic = database.prepare('SELECT id FROM cosmetics WHERE slug = ?').get(slug);
+    if (!cosmetic || !database.prepare('SELECT 1 FROM inventory WHERE username = ? AND cosmetic_id = ?').get(session.username, cosmetic.id)) return sendJson(response, 404, { error: 'Cosmetic is not in your inventory.' });
+    database.prepare('UPDATE inventory SET equipped = 0 WHERE username = ?').run(session.username);
+    database.prepare('UPDATE inventory SET equipped = 1 WHERE username = ? AND cosmetic_id = ?').run(session.username, cosmetic.id);
+    return sendJson(response, 200, { equipped: slug });
+  }
+
+  if (request.url === '/api/chat/report' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const body = await readJson(request).catch(() => ({}));
+    const messageId = Number(body.messageId);
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 160) : '';
+    if (!Number.isInteger(messageId) || !reason) return sendJson(response, 400, { error: 'A message id and reason are required.' });
+    database.prepare('INSERT INTO chat_reports (message_id, reporter, reason, created_at) VALUES (?, ?, ?, ?)').run(messageId, session.username, reason, Date.now());
+    return sendJson(response, 201, { reported: true });
+  }
+
+  if (request.url === '/api/chat/block' && request.method === 'POST') {
+    const session = requireSession(request, response);
+    if (!session) return;
+    const body = await readJson(request).catch(() => ({}));
+    const blocked = typeof body.username === 'string' ? body.username.trim() : '';
+    if (!blocked || blocked.toLowerCase() === session.username.toLowerCase()) return sendJson(response, 400, { error: 'Choose another player.' });
+    database.prepare('INSERT OR IGNORE INTO chat_blocks (blocker, blocked, created_at) VALUES (?, ?, ?)').run(session.username.toLowerCase(), blocked.toLowerCase(), Date.now());
+    return sendJson(response, 201, { blocked });
+  }
+
+  if (request.url === '/api/admin/chat/reports' && request.method === 'GET') {
+    if (!requireOwner(request, response)) return;
+    const reports = database.prepare('SELECT id, message_id AS messageId, reporter, reason, created_at AS createdAt FROM chat_reports ORDER BY created_at DESC LIMIT 200').all();
+    return sendJson(response, 200, { reports });
   }
 
   sendJson(response, 404, { error: 'Not found' });
@@ -284,6 +704,9 @@ websocketServer.on('connection', (socket) => {
         return;
       }
       socket.user = session.username;
+      const requestedGame = normalizeSlug(message.gameSlug || 'unknown-halls');
+      const publishedGame = database.prepare("SELECT slug FROM games WHERE slug = ? AND status = 'published'").get(requestedGame);
+      socket.gameSlug = publishedGame?.slug ?? 'unknown-halls';
       socket.send(JSON.stringify({ type: 'joined', username: socket.user, role: chatRole(socket.user) }));
       socket.send(JSON.stringify({ type: 'public_parties', parties: publicPartyList() }));
       broadcastPlayers();
@@ -525,12 +948,42 @@ websocketServer.on('connection', (socket) => {
       const rawText = typeof message.text === 'string' ? message.text.trim() : '';
       const text = filterChat(rawText);
       if (!text) return;
-      broadcastChat(socket, {
+      const payload = {
         type: 'chat',
         username: socket.user,
         role: chatRole(socket.user),
         text,
         sentAt: Date.now(),
+      };
+      if (socket.partyCode) broadcastChat(socket, payload);
+      else {
+        const gameSlug = socket.gameSlug ?? 'unknown-halls';
+        const stored = database.prepare('INSERT INTO chat_messages (scope, scope_id, username, text, created_at) VALUES (\'game\', ?, ?, ?, ?)').run(gameSlug, socket.user, text, payload.sentAt);
+        broadcastGameChat(gameSlug, { ...payload, type: 'game_chat', gameSlug, messageId: Number(stored.lastInsertRowid) });
+      }
+    }
+
+    if (message.type === 'game_chat') {
+      if (!socket.user || !socket.gameSlug) return;
+      const current = Date.now();
+      const previous = chatRate.get(socket) ?? 0;
+      if (current - previous < 700) {
+        socket.send(JSON.stringify({ type: 'error', message: 'Please slow down before sending another message.' }));
+        return;
+      }
+      chatRate.set(socket, current);
+      const rawText = typeof message.text === 'string' ? message.text.trim() : '';
+      const text = filterChat(rawText).slice(0, 240);
+      if (!text) return;
+      const stored = database.prepare('INSERT INTO chat_messages (scope, scope_id, username, text, created_at) VALUES (\'game\', ?, ?, ?, ?)').run(socket.gameSlug, socket.user, text, current);
+      broadcastGameChat(socket.gameSlug, {
+        type: 'game_chat',
+        gameSlug: socket.gameSlug,
+        messageId: Number(stored.lastInsertRowid),
+        username: socket.user,
+        role: chatRole(socket.user),
+        text,
+        sentAt: current,
       });
     }
 
