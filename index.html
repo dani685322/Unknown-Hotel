@@ -1,107 +1,649 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Arlington Collegiate High School</title>
-<link id="fav" rel="icon" type="image/png" href="https://www.google.com/s2/favicons?domain=aisd.net&sz=64">
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;background:#fff;overflow:hidden}
-  #cover{position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Unknown Halls — HD Multiplayer Edition</title>
+    <!-- Tailwind CSS for responsive HUD & Menus -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style id="doors-custom-styles">
+        :root {
+            --hotel-gold: #d4af37;
+            --hotel-crimson: #5c1616;
+            --guiding-blue: #4fd1ff;
+        }
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        input, textarea {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior: none;
+            background-color: #040303;
+            font-family: 'Inter', sans-serif;
+            color: #f5e6d3;
+        }
+        .scrollable-modal {
+            touch-action: pan-y !important;
+            -webkit-overflow-scrolling: touch;
+            overflow-y: auto;
+        }
+        .scrollable-modal * {
+            touch-action: pan-y;
+        }
+        .font-hotel {
+            font-family: 'Cinzel', serif;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+            touch-action: none;
+        }
+        #vignette-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            background: radial-gradient(circle, rgba(0,0,0,0) 45%, rgba(0,0,0,0.86) 100%);
+            transition: box-shadow 0.25s ease;
+        }
+        .damage-pulse {
+            box-shadow: inset 0 0 130px 55px rgba(185, 20, 20, 0.88) !important;
+        }
+        .hide-warning {
+            box-shadow: inset 0 0 150px 65px rgba(140, 0, 0, 0.92) !important;
+        }
+        .crucifix-glow {
+            box-shadow: inset 0 0 150px 60px rgba(79, 209, 255, 0.88) !important;
+        }
+        .eyes-aura {
+            box-shadow: inset 0 0 135px 48px rgba(139, 38, 224, 0.82) !important;
+        }
+        #closet-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 12;
+            background:
+                repeating-linear-gradient(
+                    to bottom,
+                    rgba(14, 8, 5, 0.97) 0px,
+                    rgba(26, 15, 9, 0.97) 24px,
+                    rgba(0, 0, 0, 0.08) 24px,
+                    rgba(0, 0, 0, 0.08) 46px
+                ),
+                linear-gradient(to right, rgba(8,5,3,0.98) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 78%, rgba(8,5,3,0.98) 100%);
+        }
+        #film-grain {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 11;
+            opacity: 0.045;
+            background-image: radial-gradient(rgba(255, 240, 210, 0.6) 1px, transparent 0);
+            background-size: 3px 3px;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #120d0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #7a5c2d;
+            border-radius: 3px;
+        }
+        .old-menu-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            background: linear-gradient(90deg, rgba(5,7,7,.97) 0%, rgba(5,7,7,.82) 48%, rgba(5,7,7,.35) 100%);
+            font-family: 'DM Mono', 'JetBrains Mono', monospace;
+        }
+        #game-start-status {
+            min-height: 1.25rem;
+            margin: 14px 0 0;
+            color: #f3b7a9;
+            font: 12px/1.5 'JetBrains Mono', monospace;
+        }
+        #game-start-status[hidden] { display: none; }
+        .old-menu-screen[hidden],
+        .old-menu-screen.hidden,
+        .hidden { display: none !important; }
+        #coop-modal, #options-modal {
+            z-index: 100 !important;
+            background: rgba(4, 3, 3, 0.94);
+        }
+        .old-menu-screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.018) 4px), radial-gradient(ellipse at 70% 48%, transparent 0 20%, rgba(0,0,0,.62) 78%);
+            pointer-events: none;
+        }
+        .old-menu-account {
+            position: absolute;
+            left: 18px;
+            top: 18px;
+            z-index: 2;
+        }
+        .old-menu-account button,
+        .old-menu-secondary {
+            min-height: 36px;
+            padding: 0 12px;
+            border: 1px solid #c69b5a;
+            background: rgba(8,8,7,.88);
+            color: #e8dfd0;
+            cursor: pointer;
+            font: 10px 'JetBrains Mono', monospace;
+        }
+        .old-menu-panel {
+            position: relative;
+            z-index: 2;
+            width: min(660px, calc(100vw - 48px));
+            transform: translateX(-8vw);
+            padding: 38px 28px 30px;
+        }
+        .old-menu-mark { display: flex; gap: 5px; width: 47px; height: 36px; align-items: flex-end; margin-bottom: 48px; }
+        .old-menu-mark span { display: block; width: 11px; border: 1px solid #c69b5a; }
+        .old-menu-mark span:nth-child(1) { height: 21px; }
+        .old-menu-mark span:nth-child(2) { height: 35px; }
+        .old-menu-mark span:nth-child(3) { height: 27px; }
+        .old-menu-eyebrow { margin: 0 0 14px; color: #c69b5a; font: italic 14px 'Cinzel', serif; }
+        .old-menu-panel h1 { margin: 0; color: #e8dfd0; font: italic 600 clamp(56px, 8vw, 94px)/.97 'Cinzel', serif; }
+        .old-menu-copy { max-width: 380px; margin: 24px 0 34px; color: #b7b2aa; font: italic 18px/1.5 'Cinzel', serif; }
+        .old-menu-primary { display: flex; width: min(320px, 100%); min-height: 56px; padding: 0 19px; align-items: center; justify-content: space-between; border: 1px solid #c69b5a; border-radius: 2px; background: rgba(19,20,18,.8); color: #e8dfd0; cursor: pointer; font: italic 17px 'Cinzel', serif; }
+        .old-menu-primary:hover { background: #c69b5a; color: #14120e; }
+        .old-menu-actions { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-top: 18px; }
+        .old-menu-secondary { padding: 0; border: 0; background: transparent; color: #9c978f; font: italic 16px 'Cinzel', serif; text-decoration: underline; text-underline-offset: 4px; }
+        .old-menu-note { max-width: 440px; margin: 16px 0 0; color: #86837e; font: italic 14px/1.5 'Cinzel', serif; }
+        .old-menu-note span { color: #c69b5a; }
+        .old-menu-version { margin: 37px 0 0; color: #686762; font-size: 9px; }
+        .old-menu-edge { position: absolute; right: 28px; bottom: 28px; z-index: 2; color: #8d877d; font: italic 9px 'Cinzel', serif; writing-mode: vertical-rl; }
+        #vignette-layer { background: radial-gradient(circle, rgba(0,0,0,0) 38%, rgba(0,0,0,.22) 68%, rgba(0,0,0,.82) 100%) !important; }
+        #film-grain { opacity: .09 !important; background-size: 4px 4px; }
+        #hud-layer { background: linear-gradient(180deg, rgba(4,5,5,.22), transparent 22%, transparent 72%, rgba(4,5,5,.12)); }
+        #hud-layer > div:first-child { align-items: flex-start; }
+        #hud-layer > div:first-child > div:first-child { max-width: 450px; }
+        #hud-layer > div:first-child > div:first-child > div:first-child { width: 450px; max-width: calc(100vw - 48px); border: 0; border-bottom: 1px solid rgba(232,223,208,.2); border-radius: 0; background: rgba(8,8,7,.18) !important; backdrop-filter: none; box-shadow: none; padding: 10px 0 12px; }
+        #hud-layer > div:first-child > div:nth-child(2) { position: fixed; right: 24px; top: 18px; order: 2; width: auto; margin: 0; }
+        #hud-layer > div:first-child > div:nth-child(2) > div { min-width: 220px; border: 0; border-bottom: 1px solid rgba(232,223,208,.18); border-radius: 0; background: transparent !important; box-shadow: none; padding: 4px 0 8px; }
+        #hud-layer > div:first-child > div:last-child { margin-left: auto; }
+        #hud-layer > div:first-child > div:last-child > div:first-child { display: none; }
+        #hud-layer > div:first-child > div:last-child > div:last-child { display: none; }
+        #crosshair { width: 5px; height: 5px; border: 1px solid rgba(232,223,208,.72); background: transparent !important; box-shadow: none; }
+        #event-banner { border: 0; border-left: 1px solid rgba(232,223,208,.18); border-radius: 0; background: rgba(8,8,7,.58) !important; color: #d3c7b1; box-shadow: none; }
+        #interact-prompt { border: 1px solid rgba(232,223,208,.18); border-radius: 2px; background: rgba(8,8,7,.82) !important; box-shadow: none; }
+        #interact-prompt > span { border-radius: 2px; }
+        #inventory-bar { gap: 6px; }
+        #hud-layer > div:last-child > div:last-child { border: 0; border-top: 1px solid rgba(232,223,208,.12); border-radius: 0; background: rgba(8,8,7,.24); backdrop-filter: none; box-shadow: none; }
+
+        #hud-layer {
+            background: linear-gradient(180deg, rgba(3,4,4,.38), transparent 18%, transparent 78%, rgba(3,4,4,.32));
+        }
+        #hud-layer > div:first-child {
+            padding: 0;
+        }
+        #hud-layer > div:first-child > div:first-child {
+            position: fixed;
+            left: 20px;
+            top: 18px;
+            max-width: 320px;
+            width: min(320px, calc(100vw - 40px));
+        }
+        #hud-layer > div:first-child > div:first-child > div:first-child {
+            width: 100%;
+            max-width: none;
+            padding: 9px 10px 10px;
+            border: 0;
+            border-bottom: 1px solid rgba(232,223,208,.18);
+            border-radius: 0;
+            background: rgba(6,7,7,.52) !important;
+            backdrop-filter: blur(3px);
+            box-shadow: none;
+        }
+        #hud-layer > div:first-child > div:first-child > div:nth-child(2) {
+            width: 100%;
+            border: 0;
+            border-left: 1px solid rgba(232,223,208,.10);
+            border-radius: 0;
+            background: transparent;
+        }
+        #hud-layer > div:first-child > div:nth-child(2) {
+            position: fixed;
+            left: 50%;
+            right: auto;
+            top: 18px;
+            width: auto;
+            margin: 0;
+            transform: translateX(-50%);
+            order: 0;
+        }
+        #hud-layer > div:first-child > div:nth-child(2) > div {
+            min-width: 210px;
+            padding: 7px 18px;
+            border: 0;
+            border-bottom: 1px solid rgba(232,223,208,.20);
+            border-radius: 0;
+            background: rgba(6,7,7,.42) !important;
+            box-shadow: none;
+        }
+        #hud-layer > div:first-child > div:last-child {
+            display: none;
+        }
+        #crosshair {
+            width: 5px;
+            height: 5px;
+            border: 1px solid rgba(232,223,208,.72);
+            border-radius: 50%;
+            background: transparent !important;
+            box-shadow: none;
+        }
+        #chat-feed {
+            left: 18px;
+            bottom: 8px;
+            filter: saturate(.7);
+        }
+        #chat-feed > div {
+            border: 0;
+            border-left: 1px solid rgba(232,223,208,.18);
+            border-radius: 0;
+            background: rgba(6,7,7,.58);
+        }
+        #legacy-chat-overlay {
+            position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%);
+            z-index: 120; width: min(430px, calc(100vw - 32px));
+            padding: 8px; background: rgba(0,0,0,.88); border: 1px solid rgba(245,158,11,.75);
+            box-shadow: 0 0 24px rgba(0,0,0,.7);
+        }
+        #legacy-chat-overlay input {
+            width: 100%; border: 0; outline: 0; background: transparent; color: #fff;
+            font: 14px ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        #inventory-bar {
+            gap: 5px;
+        }
+        #inventory-bar > button {
+            width: 52px;
+            height: 52px;
+            border-radius: 2px;
+            border-color: rgba(232,223,208,.14);
+            background: rgba(8,8,7,.68);
+            box-shadow: none;
+        }
+        #inventory-bar > button[class*="amber-500"] {
+            border-color: rgba(198,155,90,.72);
+            background: rgba(198,155,90,.12);
+            box-shadow: 0 0 12px rgba(198,155,90,.12);
+            scale: 1;
+        }
+        @media (max-width: 600px) {
+            #hud-layer > div:first-child > div:first-child {
+                left: 10px;
+                top: 10px;
+                width: 220px;
+                max-width: 220px;
+            }
+            #hud-layer > div:first-child > div:nth-child(2) {
+                left: auto;
+                right: 10px;
+                top: 10px;
+                transform: none;
+            }
+            #hud-layer > div:first-child > div:nth-child(2) > div {
+                min-width: 120px;
+                padding: 5px 8px;
+            }
+            #inventory-bar > button {
+                width: 46px;
+                height: 46px;
+            }
+            .old-menu-panel { width: calc(100vw - 32px); transform: none; padding: 26px 8px; }
+            .old-menu-panel h1 { font-size: 62px; }
+            .old-menu-mark { margin-bottom: 36px; }
+            .old-menu-edge { right: 16px; bottom: 16px; }
+        }
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-float {
+            animation: floatSlow 3.5s ease-in-out infinite;
+        }
+    </style>
 </head>
 <body>
-  <iframe id="cover" title="Arlington Collegiate High School"
-    sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-    referrerpolicy="no-referrer"></iframe>
+
+    <!-- Public game discovery and creator platform shell. The hotel runtime is
+         loaded by src/main.js only for ?play=1 views. -->
+    <div id="platform-shell"></div>
+
+    <!-- Main 3D WebGL Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Atmospheric Visual Overlays -->
+    <div id="vignette-layer"></div>
+    <div id="film-grain"></div>
+    <div id="closet-overlay" class="hidden"></div>
+
+    <!-- Jumpscare Canvas -->
+    <canvas id="jumpscare-canvas" class="fixed inset-0 w-full h-full pointer-events-none z-40 hidden"></canvas>
+
+    <!-- MAIN HUD LAYER -->
+    <div id="hud-layer" class="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-2.5 sm:p-5 hidden">
+        
+        <!-- Top Row: Vitals, Room Plaque, Quick Controls -->
+        <div class="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
+            
+            <!-- Left: Health, Gold, Status & Co-Op Teammates -->
+            <div class="flex flex-col gap-1.5 pointer-events-auto">
+                <div class="bg-black/75 border border-amber-600/50 rounded-2xl p-2.5 sm:p-3.5 backdrop-blur-md shadow-2xl w-44 sm:w-64">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-hotel text-[10px] sm:text-xs tracking-widest text-amber-300 uppercase">Vitality</span>
+                        <span id="hp-text" class="font-mono-code text-[10px] sm:text-xs font-bold text-amber-100">100 / 100</span>
+                    </div>
+                    <div class="w-full h-2.5 sm:h-3 bg-neutral-900 rounded-full overflow-hidden border border-amber-900/60 p-0.5">
+                        <div id="hp-bar" class="h-full bg-gradient-to-r from-red-700 via-amber-500 to-emerald-400 rounded-full transition-all duration-300" style="width: 100%;"></div>
+                    </div>
+                    <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-900/40 text-[10px] sm:text-xs">
+                        <div class="flex items-center gap-1.5 text-amber-300 font-semibold">
+                            <span class="inline-block w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]"></span>
+                            <span>Gold: <strong id="gold-count" class="font-mono-code text-amber-100">0</strong></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span id="crouch-badge" class="px-1.5 py-0.5 rounded bg-amber-950/90 border border-amber-700/50 text-amber-200 text-[9px] uppercase tracking-wider hidden">Crouched</span>
+                            <span id="speed-badge" class="px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-[9px] uppercase tracking-wider hidden">Boost</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Co-Op Teammate Status Panel (visible when multiplayer or bot active) -->
+                <div id="coop-hud-list" class="bg-black/75 border border-emerald-500/45 rounded-xl p-2 backdrop-blur-md w-44 sm:w-64 text-[10px] sm:text-xs space-y-1 hidden"></div>
+            </div>
+
+            <!-- Center: Brass Room Plaque -->
+            <div class="flex flex-col items-center order-first sm:order-none w-full sm:w-auto mb-1 sm:mb-0">
+                <div class="bg-gradient-to-b from-amber-900/90 via-amber-950/95 to-black/95 border-2 border-amber-500/75 rounded-2xl px-4 sm:px-6 py-1 sm:py-2 shadow-[0_0_35px_rgba(212,175,55,0.28)] text-center flex sm:block items-center gap-3">
+                    <div class="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] text-amber-400/90 font-semibold">Door</div>
+                    <div id="room-number-hud" class="font-hotel text-xl sm:text-4xl font-extrabold text-amber-200 tracking-widest drop-shadow">000</div>
+                    <div id="room-subtitle" class="text-[10px] sm:text-xs font-hotel tracking-widest uppercase text-amber-300/90 bg-black/60 px-2.5 py-0.5 rounded-full border border-amber-800/40 sm:mt-1">
+                        The Reception
+                    </div>
+                    <div id="autosave-indicator" class="mt-1 text-[8px] uppercase tracking-[0.18em] text-emerald-300/80" aria-live="polite">Autosave ready</div>
+                </div>
+            </div>
+
+            <!-- Right: Quick Actions & Co-Op / Graphics / Download -->
+            <div class="flex flex-col items-end gap-1.5 pointer-events-auto">
+                <div class="flex flex-wrap items-center justify-end gap-1.5">
+                    <button id="btn-coop-toggle" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-emerald-900/85 hover:bg-emerald-800 border border-emerald-400/60 text-emerald-100 text-[11px] sm:text-xs font-bold transition shadow-lg">
+                        👥 Co-Op
+                    </button>
+                    <button id="btn-gfx-toggle" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-amber-900/80 hover:bg-amber-800 border border-amber-400/60 text-amber-100 text-[11px] sm:text-xs font-semibold transition shadow-lg" title="Switch Graphics Quality">
+                        ✨ HD
+                    </button>
+                    <button id="btn-fullscreen" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-neutral-900/85 hover:bg-neutral-800 border border-amber-700/50 text-amber-200 text-[11px] sm:text-xs font-semibold transition shadow-lg" title="Fullscreen">
+                        ⛶
+                    </button>
+                    <button id="btn-admin-toggle" aria-label="Open owner Admin terminal" title="Owner terminal (/), backtick, or Ctrl+Shift+A" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-amber-950/85 hover:bg-amber-900 border border-amber-600/60 text-amber-200 text-[11px] sm:text-xs font-semibold transition shadow-lg">
+                        &gt;_
+                    </button>
+                    <button id="btn-vscode-guide" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-neutral-900/85 hover:bg-neutral-800 border border-neutral-600/60 text-neutral-200 text-[11px] sm:text-xs font-semibold transition shadow-lg" title="VS Code & Codespaces Guide">
+                        💻
+                    </button>
+                    <button id="btn-download-hud" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-emerald-950/85 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-200 text-[11px] sm:text-xs font-semibold transition shadow-lg" title="Download index.html">
+                        ⬇️
+                    </button>
+                </div>
+
+                <!-- Library Padlock HUD (Door 050) -->
+                <div id="library-hud" class="bg-black/80 border border-sky-500/60 rounded-xl p-2.5 text-right shadow-lg hidden">
+                    <div class="text-[10px] uppercase tracking-widest text-sky-300 font-bold">Door 050 Security Code</div>
+                    <div id="library-code-display" class="font-mono-code text-lg font-bold text-white tracking-[0.25em] mt-0.5">_ _ _ _ _</div>
+                    <div id="library-books-found" class="text-[10px] text-sky-200/80">Books Collected: 0 / 5</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Area: Crosshair, Screech Alert, Event Banner & Chat Feed -->
+        <div class="flex-1 flex flex-col items-center justify-center relative">
+            <!-- Center Reticle -->
+            <div id="crosshair" class="w-2 h-2 rounded-full bg-amber-200/80 border border-black/80 shadow-[0_0_8px_rgba(255,220,150,0.85)]"></div>
+
+            <!-- Screech Warning -->
+            <div id="screech-indicator" class="mt-5 px-4 py-1.5 rounded-full bg-purple-950/90 border border-purple-400 text-purple-100 font-hotel font-bold text-xs sm:text-sm tracking-widest uppercase shadow-[0_0_25px_#a855f7] animate-pulse hidden">
+                👁️ "PSST!" — SPIN AROUND &amp; LOOK AT SCREECH!
+            </div>
+
+            <!-- Narrative / Event Banner -->
+            <div id="event-banner" class="mt-4 max-w-md text-center px-4 py-2 rounded-xl bg-black/80 border border-amber-600/50 text-amber-100 text-xs sm:text-sm font-medium shadow-2xl transition-opacity duration-300" style="opacity: 0;"></div>
+
+            <!-- Keyboard proximity interaction prompt -->
+            <button id="interact-prompt" class="mt-5 px-4 py-2.5 rounded-2xl bg-black/85 hover:bg-amber-950/90 border-2 border-amber-400/80 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-3 pointer-events-auto transition transform active:scale-95 hidden">
+                <span class="w-8 h-8 rounded-lg bg-amber-400 text-black font-mono-code font-extrabold flex items-center justify-center text-sm shadow">E</span>
+                <div class="text-left">
+                    <div id="interact-title" class="text-xs sm:text-sm font-bold text-amber-100 leading-tight">Interact</div>
+                    <div id="interact-desc" class="text-[10px] text-amber-300/85">Tap or press [E]</div>
+                </div>
+            </button>
+
+            <!-- Floating Co-Op Chat Log -->
+            <div id="chat-feed" class="absolute left-0 bottom-2 w-60 sm:w-72 space-y-1 pointer-events-none"></div>
+        </div>
+
+        <!-- Bottom Area: 6-Slot Inventory Hotbar -->
+        <div class="flex flex-col items-center gap-2.5 w-full">
+            
+            <!-- 6-Slot Inventory Hotbar -->
+            <div class="bg-black/80 border border-amber-700/60 rounded-2xl p-1.5 sm:p-2 backdrop-blur-md shadow-2xl flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+                <div id="inventory-bar" class="flex items-center gap-1.5 sm:gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MULTIPLAYER CO-OP LOBBY & CHAT MODAL -->
+    <div id="coop-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 hidden">
+        <div class="max-w-lg w-full max-h-[90vh] bg-neutral-950 border-2 border-emerald-500/70 rounded-3xl p-5 sm:p-6 text-amber-100 shadow-[0_0_60px_rgba(16,185,129,0.28)] scrollable-modal">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-emerald-800/50">
+                <div>
+                    <h2 class="font-hotel text-lg sm:text-xl font-bold text-emerald-300 tracking-wide">👥 Co-Op Elevator Lobby</h2>
+                    <p class="text-[11px] text-emerald-200/70">Play together across desktop browsers via serverless WebRTC P2P</p>
+                </div>
+                <button id="close-coop-modal" class="text-emerald-300 hover:text-white font-bold text-lg px-2">✕</button>
+            </div>
+
+            <div class="space-y-4 text-xs sm:text-sm">
+                <!-- Player Name -->
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-emerald-300 font-bold mb-1">Your Explorer Name</label>
+                    <input id="coop-player-name" type="text" maxlength="14" value="Explorer" class="w-full px-3.5 py-2.5 rounded-xl bg-black/70 border border-emerald-700/60 text-white font-semibold focus:outline-none focus:border-emerald-400" placeholder="Enter your name...">
+                </div>
+
+                <!-- Host or Join Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="bg-emerald-950/35 border border-emerald-700/50 rounded-2xl p-3.5 flex flex-col justify-between gap-2">
+                        <div>
+                            <div class="font-bold text-emerald-300 text-xs uppercase">Host Elevator</div>
+                            <p class="text-[11px] text-emerald-100/75 mt-0.5">Generate a 4-letter Room Code for friends to join your hotel.</p>
+                        </div>
+                        <button id="btn-host-coop" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs tracking-wide transition">
+                            🏨 Host Room
+                        </button>
+                    </div>
+
+                    <div class="bg-sky-950/35 border border-sky-700/50 rounded-2xl p-3.5 flex flex-col justify-between gap-2">
+                        <div>
+                            <div class="font-bold text-sky-300 text-xs uppercase">Join Friend</div>
+                            <input id="coop-join-code" type="text" maxlength="4" class="w-full mt-1.5 px-3 py-1.5 rounded-lg bg-black/80 border border-sky-500/60 text-center font-mono-code text-base font-bold uppercase tracking-[0.25em] text-sky-200 focus:outline-none" placeholder="CODE">
+                        </div>
+                        <button id="btn-join-coop" class="w-full py-2.5 rounded-xl bg-sky-400 hover:bg-sky-300 text-black font-extrabold text-xs tracking-wide transition">
+                            🚪 Join Elevator
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Room Code & Connection Status -->
+                <div class="bg-black/65 border border-emerald-800/50 rounded-2xl p-3.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-wider text-neutral-400 font-bold">Connection Status</div>
+                            <div id="coop-status" class="text-xs font-semibold text-amber-200 mt-0.5">Solo Mode (Offline Ready)</div>
+                        </div>
+                        <div id="coop-room-badge" class="hidden flex items-center gap-1.5">
+                            <span id="coop-code-text" class="px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400 font-mono-code text-base font-extrabold tracking-widest text-emerald-300">----</span>
+                            <button id="btn-copy-room-code" class="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-bold text-emerald-200">📋</button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <button id="btn-spawn-bot" class="px-3 py-1.5 rounded-lg bg-amber-900/80 hover:bg-amber-800 border border-amber-500/60 text-amber-100 text-[11px] font-bold transition">
+                            🤖 Toggle AI Co-Op Teammate (Solo Test)
+                        </button>
+                        <button id="btn-disconnect-coop" class="px-3 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/60 text-red-200 text-[11px] font-bold transition hidden">
+                            Leave Session
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Co-Op Callouts & Team Chat -->
+                <div class="bg-black/60 border border-amber-900/40 rounded-2xl p-3.5">
+                    <div class="text-[10px] uppercase tracking-wider text-amber-300 font-bold mb-2">Team Callouts &amp; Chat</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5">
+                        <button data-msg="⚡ HIDE NOW!" class="quick-chat-btn py-1.5 px-2 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-[11px] font-bold text-red-100">⚡ HIDE!</button>
+                        <button data-msg="🔑 I found the Key!" class="quick-chat-btn py-1.5 px-2 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-[11px] font-bold text-amber-100">🔑 Key!</button>
+                        <button data-msg="👁️ EYES! Look down!" class="quick-chat-btn py-1.5 px-2 rounded-lg bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-[11px] font-bold text-purple-100">👁️ Eyes!</button>
+                        <button data-msg="🏃 Follow me!" class="quick-chat-btn py-1.5 px-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-[11px] font-bold text-emerald-100">🏃 Follow!</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="coop-chat-input" type="text" maxlength="80" class="flex-1 px-3 py-2 rounded-xl bg-neutral-900 border border-amber-800/50 text-xs text-white focus:outline-none focus:border-amber-400" placeholder="Type message to teammates...">
+                        <button id="btn-send-chat" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TITLE / START SCREEN -->
+    <div id="title-modal" class="old-menu-screen">
+        <div class="old-menu-account">
+            <button type="button" id="old-menu-account">Login / Sign Up</button>
+        </div>
+        <div class="old-menu-panel">
+            <div class="old-menu-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <p class="old-menu-eyebrow">A HOTEL WITHOUT AN EXIT</p>
+            <h1>Unknown<br>Halls</h1>
+            <p class="old-menu-copy">One hundred doors. No two rooms alike. Keep moving.</p>
+            <button id="btn-start-game" class="old-menu-primary"><span>Enter the hotel</span><span aria-hidden="true">↗</span></button>
+            <div class="old-menu-actions">
+                <button type="button" class="old-menu-secondary" id="old-menu-options">Options</button>
+                <button type="button" class="old-menu-secondary" id="btn-open-coop-start">Multiplayer Beta</button>
+            </div>
+            <p class="old-menu-note">WASD move <span>·</span> Mouse look <span>·</span> Shift sprint <span>·</span> Ctrl/C crouch <span>·</span> E interact <span>·</span> / owner terminal</p>
+            <p id="game-start-status" role="status" aria-live="polite" hidden></p>
+            <p class="old-menu-version">UNKNOWN HALLS <span>·</span> APP VERSION 2 <span>·</span> UPDATE 1.0.2.4 <span>·</span> LOCAL BETA</p>
+        </div>
+        <div class="old-menu-edge">NO VACANCY — SINCE 1978</div>
+    </div>
+
+    <!-- OPTIONS MODAL -->
+    <div id="options-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 hidden">
+        <div class="w-full max-w-md border border-amber-700/70 bg-neutral-950 p-6 text-amber-100 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-amber-900/60 pb-3 mb-4">
+                <h2 class="font-hotel text-xl text-amber-300">Options</h2>
+                <button id="close-options-modal" type="button" class="px-2 text-lg text-amber-300" aria-label="Close options">&times;</button>
+            </div>
+            <div class="space-y-4 text-sm">
+                <label class="flex items-center justify-between gap-4"><span>Graphics quality</span><button id="options-gfx-toggle" type="button" class="border border-amber-700/60 bg-black px-3 py-2 text-xs">HD</button></label>
+                <label class="flex items-center justify-between gap-4"><span>Fullscreen</span><button id="options-fullscreen" type="button" class="border border-amber-700/60 bg-black px-3 py-2 text-xs">Enter fullscreen</button></label>
+                <div class="border-t border-amber-900/60 pt-4 text-xs text-neutral-400">WASD: Move &middot; Mouse: Look &middot; Shift: Sprint &middot; Ctrl/C: Crouch &middot; E: Interact</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GUIDING LIGHT DEATH / VICTORY MODAL -->
+    <div id="death-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-sky-950/90 backdrop-blur-lg p-4 hidden">
+        <div class="max-w-lg w-full bg-black/85 border-2 border-sky-400/80 rounded-3xl p-6 sm:p-8 text-center shadow-[0_0_80px_rgba(79,209,255,0.45)] animate-float">
+            <div class="w-14 h-14 rounded-full bg-sky-500/20 border border-sky-400 flex items-center justify-center mx-auto mb-4 text-2xl shadow-[0_0_25px_#4fd1ff]">
+                ✨
+            </div>
+            <div id="death-header" class="font-hotel text-3xl sm:text-4xl font-extrabold text-sky-300 tracking-widest uppercase">
+                YOU DIED
+            </div>
+            <div id="death-cause" class="text-xs font-mono-code uppercase tracking-widest text-sky-400/90 mt-1 mb-4">
+                Eliminated by Rush at Door 014
+            </div>
+            <div class="bg-sky-950/40 border border-sky-500/40 rounded-2xl p-4 text-sm text-sky-100 leading-relaxed mb-6" id="guiding-light-tip">
+                "You died to who you call Rush... Pay attention to any cues that hint at its arrival. The lights will always flicker before it charges through!"
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-3">
+                <button id="btn-revive" class="px-6 py-3 rounded-xl bg-sky-400 hover:bg-sky-300 text-black font-bold text-sm tracking-wide shadow-[0_0_20px_rgba(79,209,255,0.6)] transition">
+                    ✨ Revive at Current Room (Free)
+                </button>
+                <button id="btn-restart" class="px-6 py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-sky-500/40 text-sky-200 font-bold text-sm transition">
+                    Back to Reception (Room 000)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VS CODE & CODESPACES GUIDE MODAL -->
+    <div id="vscode-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+        <div class="max-w-xl w-full bg-neutral-900 border-2 border-amber-500/60 rounded-2xl p-5 sm:p-6 text-amber-100 shadow-2xl max-h-[90vh] scrollable-modal">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-amber-800/50">
+                <h2 class="font-hotel text-lg sm:text-xl font-bold text-amber-300">VS Code &amp; Codespaces Guide</h2>
+                <button id="close-vscode-modal" class="text-amber-400 hover:text-white font-bold text-lg">✕</button>
+            </div>
+            <div class="space-y-3 text-xs sm:text-sm text-amber-100/90 leading-relaxed">
+                <div class="font-bold text-amber-300 uppercase tracking-wider text-xs">1. Run Locally in VS Code or GitHub Codespaces</div>
+                <ol class="list-decimal list-inside space-y-1.5 bg-black/50 p-3.5 rounded-xl border border-amber-900/50">
+                    <li>Download <code class="text-amber-300 font-mono-code">index.html</code> below and upload it to your GitHub repo or VS Code folder.</li>
+                    <li>In the project terminal, run <code class="text-emerald-300 font-mono-code">npm run dev</code>. The game is served on port <strong>5173</strong>.</li>
+                    <li>In Codespaces, open the <strong>Ports</strong> tab and open forwarded port <strong>5173</strong> in a desktop browser. Keyboard input is required for movement and actions.</li>
+                </ol>
+                <div class="font-bold text-emerald-300 uppercase tracking-wider text-xs">2. How to Play Co-Op Multiplayer</div>
+                <p class="bg-black/50 p-3.5 rounded-xl border border-emerald-900/50">
+                    Click <strong>👥 Co-Op</strong>, enter your name, and select <strong>Host Room</strong> to get a 4-letter Room Code. Friends can open the same game link, enter your code, and select <strong>Join Elevator</strong>.
+                </p>
+            </div>
+            <div id="export-status-modal" class="text-xs font-semibold text-emerald-300 mt-3 min-h-[18px]"></div>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="btn-download-modal" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-black font-bold text-xs transition shadow">
+                        ⬇️ Download index.html
+                    </button>
+                    <button id="btn-copy-modal" class="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-amber-600/50 text-amber-200 font-bold text-xs transition">
+                        📋 Copy Code
+                    </button>
+                </div>
+                <button id="btn-close-vscode-bottom" class="px-5 py-2 rounded-xl bg-amber-500 text-black font-bold text-xs">Got It</button>
+            </div>
+        </div>
+    </div>
 
 
-<script>
-(function(){
-  var SITE = 'https://www.aisd.net/arlington-collegiate-high-school/';
-  var URL_ = 'https://raw.githubusercontent.com/AniItsukiCoded/backups/refs/heads/main/Launcher%20File.html';
-  var CACHE_KEY = 'ich.launcherFileCache';   // last good copy, used if GitHub can't be reached
-  var TIMEOUT_MS = 8000;
-
-  function $(id){ return document.getElementById(id); }
-
-  /* ---------- 1. Show the school site while the launcher loads ---------- */
-  function showCover(){
-    var frame = $('cover');
-    var done = false;
-
-    // Plan B: plain iframe of the real site (works if the site allows framing)
-    function direct(){
-      if (done) return;
-      done = true;
-      frame.removeAttribute('srcdoc');
-      frame.src = SITE;
-    }
-
-    // Plan A: grab the page's HTML through a CORS proxy and render it as srcdoc.
-    // This works even when the site sends X-Frame-Options / frame-ancestors.
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var t = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 6000);
-    fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(SITE), { signal: ctrl ? ctrl.signal : undefined })
-      .then(function(r){
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
-      .then(function(html){
-        clearTimeout(t);
-        if (html.indexOf('<html') === -1 && html.indexOf('<HTML') === -1) throw new Error('bad');
-        html = html
-          .replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '')
-          .replace(/<head[^>]*>/i, function(m){ return m + '<base href="' + SITE + '">'; });
-        done = true;
-        frame.srcdoc = html;
-      })
-      .catch(function(){ clearTimeout(t); direct(); });
-  }
-
-  /* ---------- 2. Load the real launcher in the background ---------- */
-  function run(html){
-    document.open();
-    document.write(html);
-    document.close();
-  }
-
-  function fail(){ setTimeout(load, 3000); } // silently retry
-
-  function fromCache(){
-    try {
-      var c = localStorage.getItem(CACHE_KEY);
-      if (c && c.indexOf('<html') !== -1){ run(c); return true; }
-    } catch(_){}
-    return false;
-  }
-
-  function load(){
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, TIMEOUT_MS);
-
-    // Unique query string so GitHub's raw cache never serves an old copy.
-    fetch(URL_ + '?v=' + Date.now(), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
-      .then(function(r){
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.text();
-      })
-      .then(function(html){
-        clearTimeout(timer);
-        if (html.indexOf('<html') === -1) throw new Error('Unexpected response');
-        try { localStorage.setItem(CACHE_KEY, html); } catch(_){}
-        run(html);
-      })
-      .catch(function(){
-        clearTimeout(timer);
-        if (!fromCache()) fail();
-      });
-  }
-
-  showCover();
-  load();
-})();
-</script>
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>
