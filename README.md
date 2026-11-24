@@ -15,6 +15,7 @@ A procedural horror-survival game and creator platform built with Three.js and a
 - Roblox-inspired original discovery launcher with new-tab game sessions.
 - Owner-approved Creator Studio scene submissions with no executable uploads.
 - Persistent game listings, verified visits, friends, moderated game chat, and original cosmetics.
+- Local and server-backed Creator Studio autosaves, plus resumable hotel runs with visible autosave status.
 
 ## Controls
 
@@ -190,6 +191,15 @@ Do not remove old entries. Keep entries concise and describe what the player can
 - Add SQLite-backed published games, owner approval, verified daily visits, friends, earned-coin cosmetics, inventory, and moderated game chat APIs.
 - Add Creator Studio safe scene JSON validation and an owner approval queue; executable scripts and uploaded web games remain blocked.
 - Validation: production build, source syntax checks, API smoke tests, and launcher/play-view browser checks.
+
+### 1.0.2.4 - Autosave and halls polish
+
+- Autosave active hotel runs every few seconds, at door transitions, and before the page closes; the title screen can resume the saved door and loadout.
+- Autosave Creator Studio drafts on the current device and patch an existing draft on the server when available.
+- Add more deliberate alcove and gallery hall variants, a less synthetic discovery visual system, and visible autosave feedback.
+- Add the safe 3D scene editor/runtime, recovered projects, friend activity, discovery sorting, and owner chat moderation.
+- Keep `HuNao` as the configured owner identity and repair its database role at server startup without storing a password in source.
+- Validation: production build, JavaScript syntax checks, API integration tests, owner-role and autosave checks, and port 5173 HTTP/API checks.
 
 ### 1.0.2.2 - Restore trusted launcher and fix development startup
 

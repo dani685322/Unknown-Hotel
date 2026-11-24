@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, gameSlug = 'unknown-halls', onOpen, onClose, onError, onJoined, onPlayers, onParty, onPublicParties, onMessage, onGameChat, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
+  constructor({ url, username, token, gameSlug = 'unknown-halls', onOpen, onClose, onError, onJoined, onPlayers, onGamePlayers, onParty, onPublicParties, onMessage, onGameChat, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -9,6 +9,7 @@ export class WebSocketClient {
     this.onError = onError;
     this.onJoined = onJoined;
     this.onPlayers = onPlayers;
+    this.onGamePlayers = onGamePlayers;
     this.onParty = onParty;
     this.onPublicParties = onPublicParties;
     this.onMessage = onMessage;
@@ -60,6 +61,7 @@ export class WebSocketClient {
         this.onJoined?.(message);
       }
       if (message.type === 'players') this.onPlayers?.(Array.isArray(message.players) ? message.players : []);
+      if (message.type === 'game_players') this.onGamePlayers?.(message.gameSlug, Array.isArray(message.players) ? message.players : []);
       if (message.type === 'party') this.onParty?.(message);
       if (message.type === 'public_parties') this.onPublicParties?.(Array.isArray(message.parties) ? message.parties : []);
       if (message.type === 'party_joined') this.onPartyJoined?.(message);
@@ -165,6 +167,10 @@ export class WebSocketClient {
 
   sendPlayerState(state) {
     this.send({ type: 'player_state', ...state });
+  }
+
+  sendGamePlayerState(state) {
+    this.send({ type: 'scene_player_state', ...state });
   }
 
   sendRoomState(roomIndex) {

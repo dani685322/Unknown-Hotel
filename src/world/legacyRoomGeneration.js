@@ -19,6 +19,7 @@ export function createRoomPlan(roomNum, sessionSeed) {
   let width = 10.5;
   let length = 22;
   const height = 4.8;
+  let variation = 'straight';
 
   if (roomNum === 0) {
     roomType = 'reception';
@@ -57,9 +58,23 @@ export function createRoomPlan(roomNum, sessionSeed) {
       roomType = 'dupe';
       subtitle = 'Corridor (Watch for Dupe Doors)';
     }
+    if (roomType === 'standard') {
+      const shapeRoll = rng();
+      if (shapeRoll < 0.22) {
+        variation = 'alcove';
+        width = 12.5;
+        length = 25;
+        subtitle = 'Hotel Hall (Check the Alcoves)';
+      } else if (shapeRoll < 0.42) {
+        variation = 'gallery';
+        width = 11.5;
+        length = 24;
+        subtitle = 'Gallery Hall (Listen for Footsteps)';
+      }
+    }
   }
 
-  return { roomNum, roomType, subtitle, width, length, height, rng };
+  return { roomNum, roomType, subtitle, width, length, height, variation, rng };
 }
 
 export function chooseEntityEncounter({ roomType, roomNum, sessionSeed, lastEntityRoom }) {

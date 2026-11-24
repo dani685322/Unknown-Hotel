@@ -1,4 +1,5 @@
 const SAVE_KEY = 'unknown-hotel.save-data';
+const SAVE_VERSION = 2;
 
 export function loadSaveData() {
   try {
@@ -29,11 +30,18 @@ export function saveRunData(runData) {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       ...current,
       run: runData && typeof runData === 'object' ? runData : null,
+      saveVersion: SAVE_VERSION,
       savedAt: Date.now(),
     }));
+    return true;
   } catch {
-    // Storage may be unavailable or full; the in-memory run can continue.
+    return false;
   }
+}
+
+export function loadSavedRun() {
+  const run = loadSaveData().run;
+  return run && typeof run === 'object' ? run : null;
 }
 
 export function clearRunData() {
@@ -41,7 +49,8 @@ export function clearRunData() {
   delete current.run;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(current));
+    return true;
   } catch {
-    // Clearing a saved run must not prevent returning to the title screen.
+    return false;
   }
 }

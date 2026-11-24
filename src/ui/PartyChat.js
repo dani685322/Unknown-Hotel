@@ -10,6 +10,7 @@ export class PartyChat {
     this.root.innerHTML = `
       <header><span>FREE PARTY CHAT</span><b>[T] OPEN · 4 PLAYER MAX</b></header>
       <div class="party-chat__messages" role="log" aria-live="polite"></div>
+      <p class="party-chat__status" aria-live="polite"></p>
       <form class="party-chat__form">
         <input maxlength="500" autocomplete="off" placeholder="Message party" aria-label="Party chat message">
       </form>`;
@@ -18,6 +19,11 @@ export class PartyChat {
     this.output = this.root.querySelector('.party-chat__messages');
     this.input = this.root.querySelector('input');
     this.form = this.root.querySelector('form');
+    this.status = this.root.querySelector('.party-chat__status');
+    this.output.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-chat-action]');
+      if (button) this.moderate(button.dataset.chatAction, button.dataset.messageId, button.dataset.username);
+    });
     this.form.addEventListener('submit', (event) => {
       event.preventDefault();
       this.send();
@@ -95,7 +101,41 @@ export class PartyChat {
     name.textContent = `${message.username}${message.role ? ` (${message.role})` : ''}:`;
     text.textContent = message.text;
     line.append(name, text);
+    const account = this.game.multiplayer?.session?.username ?? this.game.multiplayer?.account;
+    if (Number.isInteger(message.messageId) && account?.toLowerCase() !== message.username.toLowerCase() && message.username !== 'System') {
+      for (const [action, label] of [['report', 'Report'], ['block', 'Block']]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'party-chat__moderation';
+        button.textContent = label;
+        button.dataset.chatAction = action;
+        button.dataset.messageId = String(message.messageId);
+        button.dataset.username = message.username;
+        line.append(button);
+      }
+    }
     this.output.append(line);
+  }
+
+  async moderate(action, messageId, username) {
+    const session = this.game.multiplayer?.session;
+    if (!session?.token) {
+      this.status.textContent = 'Sign in to report or block a player.';
+      return;
+    }
+    try {
+      const response = await fetch(`/api/chat/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify(action === 'report' ? { messageId: Number(messageId), reason: 'Inappropriate or harmful chat.' } : { username }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? `Could not ${action} this player.`);
+      this.status.textContent = action === 'report' ? 'Message reported to the owner.' : `${username} blocked.`;
+      if (action === 'block') this.output.querySelectorAll(`[data-username="${CSS.escape(username)}"]`).forEach((line) => line.closest('div')?.remove());
+    } catch (error) {
+      this.status.textContent = error.message;
+    }
   }
 
   updateRole({ username, role }) {

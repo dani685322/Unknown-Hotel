@@ -1,6 +1,7 @@
 import { THREE, Peer, EffectComposer, RenderPass, UnrealBloomPass } from './legacy-dependencies.js';
 import { Admin } from './Admin.js';
 import { MultiplayerMenu } from './ui/MultiplayerMenu.js';
+import { clearRunData, loadSavedRun, saveRunData } from './data/savedata.js';
 import './ui/mainmenu.css';
 import './ui/admin-terminal.css';
 
@@ -1283,6 +1284,8 @@ import './ui/admin-terminal.css';
                 this.hp = 100;
                 this.gold = 0;
                 this.currentRoomNum = 0;
+                this.savedRun = loadSavedRun();
+                this.autosaveElapsed = 0;
                 this.isAlive = false;
                 this.isPaused = true;
                 this.isCrouching = false;
@@ -1349,7 +1352,12 @@ import './ui/admin-terminal.css';
                 this.statsElapsed = 0;
                 this.setupEventListeners();
                 this.detectMobileOrSmallScreen();
+                this.updateStartButton();
                 this.updateInventoryUI();
+                window.addEventListener('pagehide', () => this.autoSaveRun(true));
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'hidden') this.autoSaveRun(true);
+                });
                 this.animate();
             }
 
@@ -1654,7 +1662,8 @@ import './ui/admin-terminal.css';
             /*******************************************************************
              * 6. RUN INITIALIZATION & INVENTORY
              *******************************************************************/
-            startNewRun(overrideSeed = null, startRoom = 0, startOriginZ = 0) {
+            startNewRun(overrideSeed = null, startRoom = 0, startOriginZ = 0, resume = false) {
+                const saved = resume && this.savedRun?.mode === 'legacy' ? this.savedRun : null;
                 this.sessionSeed = overrideSeed || (Math.floor(Math.random() * 999999) + 1);
                 this.lastEntityRoom = -10;
                 this.hp = 100;
@@ -1690,9 +1699,91 @@ import './ui/admin-terminal.css';
                 this.yaw = 0;
                 this.pitch = 0;
 
-                if (startRoom === 0) {
-                    this.showBanner('Welcome to The Hotel. Grab the Reception Key from the table to unlock Door 001.');
+                if (saved) {
+                    this.hp = Math.max(1, Math.min(100, Number(saved.hp) || 100));
+                    this.gold = Math.max(0, Math.floor(Number(saved.gold) || 0));
+                    this.inventory = Array.isArray(saved.inventory) ? saved.inventory.slice(0, 6).map((item) => ({
+                        id: String(item?.id ?? '').slice(0, 32),
+                        name: String(item?.name ?? 'Item').slice(0, 32),
+                        icon: String(item?.icon ?? '•').slice(0, 4),
+                        charges: Math.max(0, Number(item?.charges) || 0),
+                        maxCharges: Math.max(1, Number(item?.maxCharges) || 1),
+                    })).filter((item) => item.id && item.charges > 0) : this.inventory;
+                    this.selectedSlot = Math.max(0, Math.min(Math.max(0, this.inventory.length - 1), Number(saved.selectedSlot) || 0));
+                    this.itemLightOn = saved.itemLightOn !== false;
+                    this.playerPos.set(Number(saved.playerPos?.x) || 0, 1.7, Number(saved.playerPos?.z) || (startOriginZ - 2.5));
+                    this.yaw = Number.isFinite(Number(saved.yaw)) ? Number(saved.yaw) : 0;
+                    this.pitch = Number.isFinite(Number(saved.pitch)) ? Math.max(-1.35, Math.min(1.35, Number(saved.pitch))) : 0;
+                    this.showBanner(`Autosave restored at Door ${String(startRoom).padStart(3, '0')}.`);
                 }
+                this.updateHUD();
+                this.updateInventoryUI();
+                this.saveRunSnapshot();
+
+                if (startRoom === 0) {
+                    this.showBanner('Welcome to Unknown Halls. Grab the Reception Key from the table to unlock Door 001.');
+                }
+            }
+
+            hasSavedRun() {
+                const room = Number(this.savedRun?.currentRoomNum);
+                const seed = Number(this.savedRun?.sessionSeed);
+                return this.savedRun?.mode === 'legacy'
+                    && Number.isInteger(room) && room >= 0 && room < 100
+                    && Number.isSafeInteger(seed) && seed > 0;
+            }
+
+            resumeSavedRun() {
+                if (!this.hasSavedRun()) return false;
+                const saved = this.savedRun;
+                const originZ = Number(saved.originZ);
+                this.startNewRun(saved.sessionSeed, Number(saved.currentRoomNum), Number.isFinite(originZ) ? originZ : 0, true);
+                return true;
+            }
+
+            updateStartButton() {
+                const button = document.getElementById('btn-start-game');
+                const label = button?.querySelector('span');
+                if (label) label.textContent = this.hasSavedRun() ? `Resume at Door ${String(this.savedRun.currentRoomNum).padStart(3, '0')}` : 'Enter the hotel';
+            }
+
+            saveRunSnapshot() {
+                if (!this.isAlive || !this.currentRoomData || this.currentRoomNum < 0 || this.currentRoomNum >= 100) return false;
+                const saved = saveRunData({
+                    mode: 'legacy',
+                    sessionSeed: this.sessionSeed,
+                    currentRoomNum: this.currentRoomNum,
+                    originZ: this.currentRoomData?.origin?.z ?? 0,
+                    hp: this.hp,
+                    gold: this.gold,
+                    inventory: this.inventory,
+                    selectedSlot: this.selectedSlot,
+                    itemLightOn: this.itemLightOn,
+                    playerPos: { x: this.playerPos.x, z: this.playerPos.z },
+                    yaw: this.yaw,
+                    pitch: this.pitch,
+                });
+                const indicator = document.getElementById('autosave-indicator');
+                if (indicator) {
+                    indicator.textContent = saved ? 'Autosaved' : 'Autosave unavailable';
+                    indicator.title = saved ? 'Your current run is saved on this device.' : 'Browser storage is unavailable or full. Your run may not be recoverable.';
+                    if (saved) {
+                        this.savedRun = loadSavedRun();
+                        indicator.dataset.savedAt = String(Date.now());
+                        clearTimeout(this.autosaveLabelTimer);
+                        this.autosaveLabelTimer = setTimeout(() => {
+                            if (indicator) indicator.textContent = 'Autosave ready';
+                        }, 1800);
+                    }
+                }
+                return saved;
+            }
+
+            autoSaveRun(force = false) {
+                if (!this.isAlive) return;
+                if (!force && this.autosaveElapsed < 2.5) return;
+                this.autosaveElapsed = 0;
+                this.saveRunSnapshot();
             }
 
             revivePlayer() {
@@ -1704,6 +1795,7 @@ import './ui/admin-terminal.css';
                 this.clearAllEntities();
                 this.addItem({ id: 'crucifix', name: 'Crucifix', icon: '✝️', charges: 1, maxCharges: 1 });
                 this.updateHUD();
+                this.saveRunSnapshot();
                 this.showBanner('✨ Guiding Light revived you and blessed you with a Crucifix!');
             }
 
@@ -1865,7 +1957,7 @@ import './ui/admin-terminal.css';
             }
 
             buildRoom(roomNum, originVec) {
-                const { rng, roomType, subtitle, width, length, height } = window.LegacyRoomGeneration.createRoomPlan(roomNum, this.sessionSeed);
+                const { rng, roomType, subtitle, width, length, height, variation } = window.LegacyRoomGeneration.createRoomPlan(roomNum, this.sessionSeed);
                 const group = new THREE.Group();
                 group.position.copy(originVec);
                 this.scene.add(group);
@@ -1995,6 +2087,57 @@ import './ui/admin-terminal.css';
                             group.add(stonePost, lantern);
                         });
                     }
+                }
+
+                if (variation === 'alcove') {
+                    [-1, 1].forEach((side) => {
+                        const centerX = side * (width / 2 - 1.15);
+                        const centerZ = -length * 0.54;
+                        const insetMat = new THREE.MeshStandardMaterial({ color: 0x15100d, roughness: 0.92 });
+                        const inset = new THREE.Mesh(new THREE.BoxGeometry(1.45, 2.45, 2.5), insetMat);
+                        inset.position.set(centerX, 1.23, centerZ);
+                        const jambs = [-1, 1].map((edge) => {
+                            const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.13, 2.65, 2.65), this.darkWoodMat);
+                            jamb.position.set(centerX + edge * 0.79, 1.32, centerZ);
+                            return jamb;
+                        });
+                        const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.16, 2.65), this.darkWoodMat);
+                        lintel.position.set(centerX, 2.65, centerZ);
+                        const bench = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.18, 0.42), this.woodMat);
+                        bench.position.set(centerX, 0.48, centerZ + 0.4);
+                        const alcoveLight = new THREE.PointLight(0xc99a58, 0.32, 4);
+                        alcoveLight.position.set(centerX, 1.9, centerZ + 0.9);
+                        inset.castShadow = true;
+                        inset.receiveShadow = true;
+                        group.add(inset, ...jambs, lintel, bench, alcoveLight);
+                    });
+                }
+
+                if (variation === 'gallery') {
+                    const runner = new THREE.Mesh(
+                        new THREE.PlaneGeometry(width * 0.42, length * 0.64),
+                        new THREE.MeshStandardMaterial({ color: 0x39211d, roughness: 0.96 }),
+                    );
+                    runner.rotation.x = -Math.PI / 2;
+                    runner.position.set(0, 0.025, -length * 0.52);
+                    group.add(runner);
+                    const benchGroup = new THREE.Group();
+                    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.62), this.woodMat);
+                    seat.position.y = 0.62;
+                    benchGroup.add(seat);
+                    [-0.82, 0.82].forEach((legX) => {
+                        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.62, 0.48), this.darkWoodMat);
+                        leg.position.set(legX, 0.31, 0);
+                        benchGroup.add(leg);
+                    });
+                    benchGroup.position.set(width * 0.23, 0, -length * 0.62);
+                    group.add(benchGroup);
+                    [-1, 1].forEach((side) => {
+                        const picture = this.createFramedPaintingMesh((roomNum + (side > 0 ? 1 : 2)) % 3);
+                        picture.position.set(side * (width / 2 - 0.08), 2.45, -length * 0.72);
+                        picture.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2;
+                        group.add(picture);
+                    });
                 }
 
                 // Chandeliers & Lights
@@ -2459,6 +2602,7 @@ import './ui/admin-terminal.css';
                     return;
                 }
                 this.buildRoom(this.currentRoomNum, nextOrigin);
+                this.saveRunSnapshot();
             }
 
             syncDoorAdvance(newRoomNum, nextOriginZ) {
@@ -2473,6 +2617,7 @@ import './ui/admin-terminal.css';
                     return;
                 }
                 this.buildRoom(this.currentRoomNum, new THREE.Vector3(0, 0, nextOriginZ));
+                this.saveRunSnapshot();
                 this.showBanner(`👥 Teammate opened Door ${String(newRoomNum).padStart(3, '0')}!`);
             }
 
@@ -2540,6 +2685,9 @@ import './ui/admin-terminal.css';
 
                 if (this.hp <= 0) {
                     this.isAlive = false;
+                    clearRunData();
+                    this.savedRun = null;
+                    this.updateStartButton();
                     if (document.pointerLockElement) document.exitPointerLock();
                     document.getElementById('death-header').textContent = 'YOU DIED';
                     document.getElementById('death-cause').textContent = `Eliminated by ${entityName} at Door ${String(this.currentRoomNum).padStart(3, '0')}`;
@@ -2550,10 +2698,13 @@ import './ui/admin-terminal.css';
 
             triggerVictory() {
                 this.isAlive = false;
+                clearRunData();
+                this.savedRun = null;
+                this.updateStartButton();
                 if (document.pointerLockElement) document.exitPointerLock();
                 document.getElementById('death-header').textContent = 'YOU ESCAPED THE HOTEL!';
                 document.getElementById('death-cause').textContent = `Reached Door 100 with ${this.gold} Gold!`;
-                document.getElementById('guiding-light-tip').textContent = `"Congratulations! You survived all 100 doors of The Hotel and reached the escape elevator."`;
+                document.getElementById('guiding-light-tip').textContent = `"Congratulations! You survived all 100 doors of Unknown Halls and reached the escape elevator."`;
                 document.getElementById('death-modal').classList.remove('hidden');
             }
 
@@ -2578,6 +2729,7 @@ import './ui/admin-terminal.css';
                 this.updateHUD();
                 this.buildRoom(target, new THREE.Vector3(0, 0, 0));
                 this.playerPos.set(0, 1.7, -2.2);
+                this.saveRunSnapshot();
                 if (!fromNetwork) this.multiplayer.broadcast({ type: 'doorOpened', newRoomNum: target, nextOriginZ: 0 });
                 return true;
             }
@@ -2703,6 +2855,8 @@ import './ui/admin-terminal.css';
                 const frameDelta = this.clock.getDelta();
                 const dt = Math.min(frameDelta, 0.1) * this.timeScale;
                 const elapsed = this.clock.elapsedTime;
+                this.autosaveElapsed += frameDelta;
+                this.autoSaveRun();
                 this.updateStats(frameDelta);
 
                 if (!this.isAlive || !this.currentRoomData) {
@@ -2873,7 +3027,7 @@ import './ui/admin-terminal.css';
                 status.hidden = true;
                 try {
                     window.doorsGame.sound.init();
-                    window.doorsGame.startNewRun();
+                    if (!window.doorsGame.resumeSavedRun()) window.doorsGame.startNewRun();
                     if (!window.doorsGame.currentRoomData || !window.doorsGame.isAlive) {
                         throw new Error('The first room did not finish generating.');
                     }
@@ -2893,7 +3047,7 @@ import './ui/admin-terminal.css';
                 } finally {
                     button.disabled = false;
                     button.removeAttribute('aria-busy');
-                    button.querySelector('span').textContent = 'Enter the hotel';
+                    window.doorsGame?.updateStartButton();
                 }
             });
             document.getElementById('btn-open-coop-start')?.addEventListener('click', () => {
