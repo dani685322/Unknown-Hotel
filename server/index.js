@@ -234,6 +234,7 @@ const sockets = new Set();
 const parties = new Map();
 const slurPattern = /\b(faggot|nigger|kike|chink|spic|tranny|whore)\b/gi;
 const chatRate = new WeakMap();
+const gameTypingRate = new WeakMap();
 const gameStateRate = new WeakMap();
 
 function filterChat(text) {
@@ -363,6 +364,15 @@ function broadcastGameChat(slug, message) {
   for (const socket of gameSockets(slug)) {
     if (message.username && database.prepare('SELECT 1 FROM chat_blocks WHERE blocker = ? AND blocked = ?').get(socket.user.toLowerCase(), message.username.toLowerCase())) continue;
     if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+  }
+}
+
+function broadcastGameTyping(slug, username, isTyping) {
+  const payload = JSON.stringify({ type: 'game_typing', gameSlug: slug, username, isTyping });
+  for (const recipient of gameSockets(slug)) {
+    if (database.prepare('SELECT 1 FROM chat_blocks WHERE blocker = ? AND blocked = ?')
+      .get(recipient.user.toLowerCase(), username.toLowerCase())) continue;
+    if (recipient.readyState === WebSocket.OPEN) recipient.send(payload);
   }
 }
 
@@ -1485,6 +1495,11 @@ websocketServer.on('connection', (socket) => {
       const rawText = typeof message.text === 'string' ? message.text.trim() : '';
       const text = filterChat(rawText).slice(0, 240);
       if (!text) return;
+      if (socket.gameTyping) {
+        socket.gameTyping = false;
+        gameTypingRate.delete(socket);
+        broadcastGameTyping(socket.gameSlug, socket.user, false);
+      }
       const stored = database.prepare('INSERT INTO chat_messages (scope, scope_id, username, text, created_at) VALUES (\'game\', ?, ?, ?, ?)').run(socket.gameSlug, socket.user, text, current);
       broadcastGameChat(socket.gameSlug, {
         type: 'game_chat',
@@ -1497,13 +1512,32 @@ websocketServer.on('connection', (socket) => {
       });
     }
 
+    if (message.type === 'game_typing') {
+      if (!socket.user || !socket.gameSlug || typeof message.isTyping !== 'boolean') return;
+      const current = Date.now();
+      const isTyping = message.isTyping;
+      if (isTyping) {
+        const previous = gameTypingRate.get(socket) ?? 0;
+        if (current - previous < 700) return;
+        gameTypingRate.set(socket, current);
+      } else {
+        gameTypingRate.delete(socket);
+      }
+      if (socket.gameTyping === isTyping && !isTyping) return;
+      socket.gameTyping = isTyping;
+      broadcastGameTyping(socket.gameSlug, socket.user, isTyping);
+    }
+
     if (message.type === 'leave') {
+      if (socket.gameTyping && socket.gameSlug) broadcastGameTyping(socket.gameSlug, socket.user, false);
+      socket.gameTyping = false;
       socket.user = null;
       broadcastPlayers();
     }
   });
   socket.on('close', () => {
     const disconnectedGame = socket.gameSlug;
+    if (socket.gameTyping && disconnectedGame) broadcastGameTyping(disconnectedGame, socket.user, false);
     if (socket.partyCode) {
       const code = socket.partyCode;
       const party = parties.get(code);

@@ -1,5 +1,5 @@
 export class WebSocketClient {
-  constructor({ url, username, token, gameSlug = 'unknown-halls', onOpen, onClose, onError, onJoined, onPlayers, onGamePlayers, onParty, onPublicParties, onMessage, onGameChat, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
+  constructor({ url, username, token, gameSlug = 'unknown-halls', onOpen, onClose, onError, onJoined, onPlayers, onGamePlayers, onParty, onPublicParties, onMessage, onGameChat, onGameTyping, onModeration, onPlayerState, onPartyLeft, onPartyJoined, onPartyStarted, onRoomState, onRoleUpdated }) {
     this.url = url;
     this.username = username;
     this.token = token;
@@ -14,6 +14,7 @@ export class WebSocketClient {
     this.onPublicParties = onPublicParties;
     this.onMessage = onMessage;
     this.onGameChat = onGameChat;
+    this.onGameTyping = onGameTyping;
     this.onModeration = onModeration;
     this.onPlayerState = onPlayerState;
     this.onPartyLeft = onPartyLeft;
@@ -78,6 +79,7 @@ export class WebSocketClient {
       if (message.type === 'error') this.onError?.(message.message ?? 'Server rejected the connection.');
       if (message.type === 'chat') this.onMessage?.(message);
       if (message.type === 'game_chat') this.onGameChat?.(message);
+      if (message.type === 'game_typing') this.onGameTyping?.(message);
       if (message.type === 'role_updated') this.onRoleUpdated?.(message);
       if (message.type === 'player_state') this.onPlayerState?.(message);
       if (message.type === 'room_state') this.onRoomState?.(message);
@@ -182,7 +184,11 @@ export class WebSocketClient {
   }
 
   sendGameChat(text) {
-    this.send({ type: 'game_chat', text });
+    return this.send({ type: 'game_chat', text });
+  }
+
+  sendGameTyping(isTyping) {
+    return this.send({ type: 'game_typing', isTyping: isTyping === true });
   }
 
   disconnect() {

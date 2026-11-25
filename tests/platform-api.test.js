@@ -268,6 +268,13 @@ test('auth, ownership, approval, visits, friends, scene safety, chat, and modera
     assert.equal(onlineFriends.data.friends[0].online, true);
     assert.equal(onlineFriends.data.friends[0].gameSlug, 'brass-passage');
 
+    bobSocket.socket.send(JSON.stringify({ type: 'game_typing', isTyping: true, username: 'Alice' }));
+    const typingStarted = await aliceSocket.waitFor((message) => message.type === 'game_typing' && message.isTyping);
+    assert.equal(typingStarted.username, 'Bob');
+    assert.equal(typingStarted.gameSlug, 'brass-passage');
+    bobSocket.socket.send(JSON.stringify({ type: 'game_typing', isTyping: false }));
+    await aliceSocket.waitFor((message) => message.type === 'game_typing' && !message.isTyping);
+
     bobSocket.socket.send(JSON.stringify({ type: 'game_chat', text: 'You are a whore https://example.com' }));
     const filteredMessage = await aliceSocket.waitFor((message) => message.type === 'game_chat');
     assert.match(filteredMessage.text, /\*{5}/);

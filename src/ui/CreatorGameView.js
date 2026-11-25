@@ -20,6 +20,10 @@ export class CreatorGameView {
     this.position = new THREE.Vector3(0, 1.65, 6);
     this.keys = new Set();
     this.messages = [];
+    this.typingPlayers = new Map();
+    this.typingTimers = new Map();
+    this.isTyping = false;
+    this.lastTypingSentAt = 0;
     this.remotePlayers = new Map();
     this.doors = [];
     this.triggers = [];
@@ -73,19 +77,34 @@ export class CreatorGameView {
       <div class="creator-runtime-top"><div><b>${this.escape(this.game.title)}</b><span>by ${this.escape(this.game.creator)}</span><small data-player-count>1 player</small></div><button data-back>Exit</button></div>
       <div class="creator-runtime-help">Click scene to look · WASD / arrows to move · E interact · T to chat</div>
       <div class="creator-runtime-status" data-game-status aria-live="polite"></div>
+      <div class="creator-chat-live" data-chat-live aria-live="polite" hidden>
+        <div class="creator-chat-feed" data-chat-feed></div>
+        <div class="creator-chat-typing" data-chat-typing hidden><span data-typing-label></span><span class="creator-typing-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      </div>
       <div class="creator-chat" hidden><div data-chat-log></div><p data-chat-status aria-live="polite"></p><form data-chat-form><input maxlength="240" placeholder="Message the room…" autocomplete="off"></form></div>
     </div>`;
     this.canvas = this.root.querySelector('[data-scene-canvas]');
     this.chat = this.root.querySelector('.creator-chat');
     this.chatLog = this.root.querySelector('[data-chat-log]');
+    this.chatFeed = this.root.querySelector('[data-chat-feed]');
+    this.chatLive = this.root.querySelector('[data-chat-live]');
+    this.chatTyping = this.root.querySelector('[data-chat-typing]');
+    this.typingLabel = this.root.querySelector('[data-typing-label]');
+    if (!this.session?.token) this.setChatStatus('Sign in to chat with players.');
     this.root.querySelector('[data-back]').addEventListener('click', () => this.exit());
     this.root.querySelector('[data-chat-form]').addEventListener('submit', (event) => {
       event.preventDefault();
       const input = event.currentTarget.querySelector('input');
-      if (input.value.trim()) this.socket?.sendGameChat(input.value.trim());
+      const text = input.value.trim();
+      this.stopTyping();
+      if (text && !this.session?.token) this.setChatStatus('Sign in to chat with players.');
+      else if (text && !this.socket?.sendGameChat(text)) this.setChatStatus('Chat connection unavailable. Try again.');
       input.value = '';
-      this.chat.hidden = true;
+      input.blur();
+      this.setChatOpen(false);
     });
+    this.root.querySelector('[data-chat-form] input').addEventListener('input', (event) => this.updateOwnTyping(event.currentTarget.value));
+    this.root.querySelector('[data-chat-form] input').addEventListener('blur', () => this.stopTyping());
     this.chatLog.addEventListener('click', (event) => {
       const button = event.target.closest('[data-chat-action]');
       if (button) this.moderateMessage(button.dataset.messageId, button.dataset.username, button.dataset.chatAction);
@@ -94,9 +113,15 @@ export class CreatorGameView {
       if (document.pointerLockElement !== this.canvas) this.canvas.requestPointerLock?.();
     });
     window.addEventListener('keydown', this.onKeyDown = (event) => {
+      if (event.code === 'Escape' && !this.chat.hidden) {
+        this.setChatOpen(false);
+        this.chat.querySelector('input').blur();
+        this.stopTyping();
+        return;
+      }
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
       if (event.code === 'KeyT') {
-        this.chat.hidden = false;
+        this.setChatOpen(true);
         this.chat.querySelector('input').focus();
         return;
       }
@@ -271,6 +296,11 @@ export class CreatorGameView {
     if (status) status.textContent = message;
   }
 
+  setChatOpen(isOpen) {
+    this.chat.hidden = !isOpen;
+    this.chatLive.style.bottom = isOpen ? `${this.chat.offsetHeight + 70}px` : '';
+  }
+
   resizeRenderer() {
     if (!this.renderer || !this.camera) return;
     const width = Math.max(1, window.innerWidth);
@@ -287,12 +317,77 @@ export class CreatorGameView {
       username: this.session.username,
       token: this.session.token,
       gameSlug: this.slug,
+      onError: (message) => this.setChatStatus(message),
+      onJoined: () => this.setChatStatus(''),
       onGameChat: (message) => this.addMessage(message),
+      onGameTyping: (message) => this.updateGameTyping(message),
       onGamePlayers: (slug, players) => {
         if (slug === this.slug) this.updateRemotePlayers(players);
       },
+      onClose: () => this.clearTypingPlayers(),
     });
     this.socket.connect();
+  }
+
+  updateOwnTyping(value) {
+    if (!value.trim()) {
+      this.stopTyping();
+      return;
+    }
+    const now = Date.now();
+    if (this.isTyping && now - this.lastTypingSentAt < 1200) return;
+    this.isTyping = true;
+    this.lastTypingSentAt = now;
+    this.socket?.sendGameTyping(true);
+  }
+
+  stopTyping() {
+    if (!this.isTyping) return;
+    this.isTyping = false;
+    this.lastTypingSentAt = 0;
+    this.socket?.sendGameTyping(false);
+  }
+
+  updateGameTyping(message) {
+    if (message.gameSlug !== this.slug || !message.username
+      || message.username.toLowerCase() === this.session?.username?.toLowerCase()) return;
+    const username = String(message.username);
+    clearTimeout(this.typingTimers.get(username));
+    this.typingTimers.delete(username);
+    if (message.isTyping) {
+      this.typingPlayers.set(username, Date.now());
+      const timer = setTimeout(() => {
+        this.typingPlayers.delete(username);
+        this.typingTimers.delete(username);
+        this.renderTypingIndicator();
+      }, 5000);
+      this.typingTimers.set(username, timer);
+    } else {
+      this.typingPlayers.delete(username);
+    }
+    this.renderTypingIndicator();
+  }
+
+  clearTypingForUser(username) {
+    clearTimeout(this.typingTimers.get(username));
+    this.typingTimers.delete(username);
+    this.typingPlayers.delete(username);
+  }
+
+  clearTypingPlayers() {
+    this.typingTimers.forEach((timer) => clearTimeout(timer));
+    this.typingTimers.clear();
+    this.typingPlayers.clear();
+    this.renderTypingIndicator();
+  }
+
+  renderTypingIndicator() {
+    if (!this.chatTyping || !this.chatLive) return;
+    const usernames = [...this.typingPlayers.keys()];
+    this.chatTyping.hidden = usernames.length === 0;
+    if (usernames.length === 1) this.typingLabel.textContent = `${usernames[0]} is typing`;
+    else if (usernames.length > 1) this.typingLabel.textContent = 'Several players are typing';
+    this.chatLive.hidden = usernames.length === 0 && !this.messages.length;
   }
 
   async loadChatHistory() {
@@ -304,6 +399,7 @@ export class CreatorGameView {
       if (!response.ok) throw new Error(data.error ?? 'Could not load chat history.');
       this.messages = data.messages ?? [];
       this.renderMessages();
+      this.renderLiveChat();
     } catch (error) {
       this.setChatStatus(`Chat history unavailable: ${error.message}`);
     }
@@ -369,9 +465,11 @@ export class CreatorGameView {
   }
 
   addMessage(message) {
+    this.clearTypingForUser(message.username);
     this.messages.push(message);
     this.messages = this.messages.slice(-40);
     this.renderMessages();
+    this.renderLiveChat();
   }
 
   renderMessages() {
@@ -399,6 +497,22 @@ export class CreatorGameView {
     this.chatLog.scrollTop = this.chatLog.scrollHeight;
   }
 
+  renderLiveChat() {
+    if (!this.chatFeed || !this.chatLive) return;
+    this.chatFeed.replaceChildren();
+    this.messages.slice(-4).forEach((message) => {
+      const row = document.createElement('div');
+      row.className = 'creator-chat-live-message';
+      const username = document.createElement('b');
+      username.textContent = `${message.username}: `;
+      const text = document.createElement('span');
+      text.textContent = message.text;
+      row.append(username, text);
+      this.chatFeed.append(row);
+    });
+    this.chatLive.hidden = !this.messages.length && this.typingPlayers.size === 0;
+  }
+
   async moderateMessage(messageId, username, action) {
     if (!this.session?.token) return;
     try {
@@ -410,7 +524,12 @@ export class CreatorGameView {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? `Could not ${action} this message.`);
       this.setChatStatus(action === 'report' ? 'Message reported to the owner.' : `${username} blocked.`);
-      if (action === 'block') this.messages = this.messages.filter((message) => message.username?.toLowerCase() !== username.toLowerCase());
+      if (action === 'block') {
+        this.messages = this.messages.filter((message) => message.username?.toLowerCase() !== username.toLowerCase());
+        this.clearTypingForUser(username);
+        this.renderLiveChat();
+        this.renderTypingIndicator();
+      }
       this.renderMessages();
     } catch (error) {
       this.setChatStatus(error.message);
@@ -439,7 +558,7 @@ export class CreatorGameView {
     if (document.getElementById('creator-runtime-style')) return;
     const style = document.createElement('style');
     style.id = 'creator-runtime-style';
-    style.textContent = `.creator-runtime{position:fixed;z-index:1000;inset:0;overflow:hidden;background:#111720;color:#f4f6fb;font:14px system-ui,sans-serif}.creator-runtime canvas{display:block;width:100vw;height:100vh}.creator-runtime-top{position:fixed;left:18px;right:18px;top:18px;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(17,23,32,.88)}.creator-runtime-top div{display:grid;gap:2px}.creator-runtime-top span,.creator-runtime-top small{color:#c1c9d2;font-size:12px}.creator-runtime-top button,.creator-panel button{padding:8px 14px;border:1px solid #c7963f;border-radius:4px;background:#28231b;color:#fff;cursor:pointer}.creator-runtime-help{position:fixed;left:18px;bottom:18px;padding:8px 11px;border:1px solid rgba(255,255,255,.14);border-radius:4px;background:rgba(17,23,32,.88);color:#c1c9d2;font-size:12px}.creator-runtime-status{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:8px 12px;color:#f0d7a4;background:rgba(17,23,32,.82)}.creator-chat{position:fixed;left:18px;bottom:58px;width:min(420px,calc(100vw - 36px));padding:10px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(17,23,32,.96)}.creator-chat [data-chat-log]{display:grid;gap:7px;max-height:260px;overflow:auto;margin-bottom:8px;color:#e4e6e9;font-size:12px}.creator-chat-message{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center}.creator-chat-message button{border:0;background:transparent;color:#d9b16a;font-size:10px;cursor:pointer}.creator-chat p{color:#c1c9d2;font-size:11px}.creator-chat input{width:100%;box-sizing:border-box;padding:9px;border:1px solid rgba(255,255,255,.16);background:#0c111a;color:#fff}.creator-panel{display:grid;gap:12px;place-items:center;align-content:center;height:100%;text-align:center}`;
+    style.textContent = `.creator-runtime{position:fixed;z-index:1000;inset:0;overflow:hidden;background:#111720;color:#f4f6fb;font:14px system-ui,sans-serif}.creator-runtime canvas{display:block;width:100vw;height:100vh}.creator-runtime-top{position:fixed;left:18px;right:18px;top:18px;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(17,23,32,.88)}.creator-runtime-top div{display:grid;gap:2px}.creator-runtime-top span,.creator-runtime-top small{color:#c1c9d2;font-size:12px}.creator-runtime-top button,.creator-panel button{padding:8px 14px;border:1px solid #c7963f;border-radius:4px;background:#28231b;color:#fff;cursor:pointer}.creator-runtime-help{position:fixed;left:18px;bottom:18px;padding:8px 11px;border:1px solid rgba(255,255,255,.14);border-radius:4px;background:rgba(17,23,32,.88);color:#c1c9d2;font-size:12px}.creator-runtime-status{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:8px 12px;color:#f0d7a4;background:rgba(17,23,32,.82)}.creator-chat{position:fixed;left:18px;bottom:58px;width:min(420px,calc(100vw - 36px));padding:10px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(17,23,32,.96)}.creator-chat [data-chat-log]{display:grid;gap:7px;max-height:260px;overflow:auto;margin-bottom:8px;color:#e4e6e9;font-size:12px}.creator-chat-message{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center}.creator-chat-message button{border:0;background:transparent;color:#d9b16a;font-size:10px;cursor:pointer}.creator-chat p{color:#c1c9d2;font-size:11px}.creator-chat input{width:100%;box-sizing:border-box;padding:9px;border:1px solid rgba(255,255,255,.16);background:#0c111a;color:#fff}.creator-chat-live{position:fixed;z-index:1001;left:18px;bottom:64px;display:grid;gap:6px;width:min(420px,calc(100vw - 36px));pointer-events:none}.creator-chat-live[hidden],.creator-chat-typing[hidden]{display:none}.creator-chat-feed{display:grid;gap:4px;max-height:150px;overflow:hidden}.creator-chat-live-message,.creator-chat-typing{width:fit-content;max-width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:rgba(17,23,32,.88);color:#f4f6fb;font-size:12px;line-height:1.4;overflow-wrap:anywhere}.creator-chat-live-message b{color:#e2c17e}.creator-chat-typing{display:flex;align-items:center;gap:8px;color:#c1c9d2}.creator-typing-dots{display:inline-flex;align-items:center;gap:3px}.creator-typing-dots i{width:5px;height:5px;border-radius:50%;background:#e2c17e;animation:creator-typing-bounce .8s infinite ease-in-out}.creator-typing-dots i:nth-child(2){animation-delay:.12s}.creator-typing-dots i:nth-child(3){animation-delay:.24s}@keyframes creator-typing-bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}.creator-panel{display:grid;gap:12px;place-items:center;align-content:center;height:100%}`;
     document.head.append(style);
   }
 
