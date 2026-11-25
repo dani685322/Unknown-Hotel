@@ -185,11 +185,14 @@ Do not remove old entries. Keep entries concise and describe what the player can
 
 ## Updates
 
+<<<<<<< HEAD
 ### 2026-11-25 - Restore hotel start-screen controls
 
 - Initialize the dynamically loaded hotel runtime whether the page is still loading or its load event has already fired, so the Enter Hotel, Options, and Multiplayer controls remain interactive in the play tab.
 - Validation: production build, JavaScript syntax checks, existing tests, and DOM-ready timing regression tests.
 
+=======
+>>>>>>> 04fe32831f2ff0d7de949422621ee576f4e0ced7
 ### 1.0.2.3 - Unknown Halls platform MVP
 
 - Add an original game-discovery launcher and `about:blank` play-tab host while loading Three.js only for `?play=1` sessions.
