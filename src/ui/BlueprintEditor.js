@@ -107,8 +107,9 @@ export class BlueprintEditor {
 
   renderNodeResults() {
     const query = this.search.value.trim().toLowerCase();
-    const matches = Object.entries(BLUEPRINT_NODE_TYPES).filter(([, definition]) =>
-      `${definition.title} ${definition.category}`.toLowerCase().includes(query));
+    const matches = Object.entries(BLUEPRINT_NODE_TYPES).filter(([type, definition]) =>
+      (type !== 'action-play-animation' || this.scene.animations?.length)
+      && `${definition.title} ${definition.category}`.toLowerCase().includes(query));
     this.results.innerHTML = matches.map(([type, definition]) => `
       <button type="button" data-add-node="${escapeHtml(type)}">
         <span>${escapeHtml(definition.category)}</span><b>${escapeHtml(definition.title)}</b>

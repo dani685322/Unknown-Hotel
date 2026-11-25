@@ -265,12 +265,13 @@ export class PlatformShell {
       doors: [],
       triggers: [],
       rules: [],
+      blueprint: { version: 1, nodes: [], edges: [] },
       multiplayer: true,
       maxPlayers: 4,
     }, null, 2);
     const sceneValue = typeof draft.scene === 'string' ? draft.scene : defaultScene;
     content.innerHTML = `<section>
-      <div class="platform-section-head"><div><p class="platform-kicker">Creator Studio</p><h1>Build a safe playable scene</h1><span class="platform-muted">Arrange approved parts in the 3D preview. Projects are validated JSON; scripts and executable uploads are not supported.</span></div></div>
+      <div class="platform-section-head"><div><p class="platform-kicker">Creator Studio</p><h1>Build a safe playable scene</h1><span class="platform-muted">Build the 3D scene, then scroll below the viewport to edit its Blueprint event graph. Projects are validated data; scripts and executable uploads are not supported.</span></div></div>
       <div class="creator-studio-layout">
         <form class="platform-form" data-create-form>
           <label>Game title<input name="title" maxlength="80" placeholder="My Hallway" value="${escapeHtml(draft.title ?? '')}" required></label>

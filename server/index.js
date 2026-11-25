@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocketServer, WebSocket } from 'ws';
 import { ADMIN_USERNAMES, CHAT_ROLES } from '../Secret Folder/UsernameAdmin.js';
+import { normalizeBlueprint } from '../src/core/BlueprintGraph.js';
 
 const host = process.env.SERVER_HOST ?? '0.0.0.0';
 const port = Number(process.env.SERVER_PORT ?? 8080);
@@ -519,7 +520,7 @@ function sceneEntities(value, key, max, normalize) {
   if (!Array.isArray(items) || items.length > max) throw new Error(`${key} must contain at most ${max} entries.`);
   return items.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${key}[${index}] must be an object.`);
-    return normalize(item);
+    return normalize(item, index);
   });
 }
 
@@ -531,12 +532,21 @@ function safeScene(value) {
   const template = value.template === undefined ? 'empty' : String(value.template);
   if (!allowedTemplates.has(template)) throw new Error('Scene template is not approved.');
   if (value.scripts !== undefined) throw new Error('Executable scripts are not allowed in creator scenes.');
-  const allowedKeys = new Set(['template', 'rooms', 'meshes', 'lights', 'spawns', 'doors', 'triggers', 'rules', 'multiplayer', 'maxPlayers', 'doorCount']);
+  const allowedKeys = new Set(['template', 'rooms', 'meshes', 'lights', 'spawns', 'doors', 'triggers', 'rules', 'blueprint', 'multiplayer', 'maxPlayers', 'doorCount']);
   const unknownKey = Object.keys(value).find((key) => !allowedKeys.has(key));
   if (unknownKey) throw new Error(`Scene property "${unknownKey}" is not supported.`);
   const legacyDoorCount = template === 'unknown-hotel' && Number.isInteger(value.doors) ? value.doors : undefined;
   if (value.doors !== undefined && !Array.isArray(value.doors) && legacyDoorCount === undefined) throw new Error('doors must be an array.');
-  const normalizeBox = (item) => ({
+  const sceneObjectIds = new Set();
+  const sceneObjectId = (item, prefix, index) => {
+    const id = item.id === undefined ? `${prefix}-${index + 1}` : item.id;
+    if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)) throw new Error('Scene object id must be a short identifier.');
+    if (sceneObjectIds.has(id)) throw new Error('Scene object ids must be unique.');
+    sceneObjectIds.add(id);
+    return id;
+  };
+  const normalizeBox = (item, index, prefix) => ({
+    id: sceneObjectId(item, prefix, index),
     x: sceneNumber(item, 'x', 0, -100, 100),
     y: sceneNumber(item, 'y', 0, -100, 100),
     z: sceneNumber(item, 'z', 0, -100, 100),
@@ -545,12 +555,13 @@ function safeScene(value) {
     depth: sceneNumber(item, 'depth', 0.5, 0.1, 100),
     material: sceneMaterial(item),
   });
-  const rooms = sceneEntities(value, 'rooms', 100, (item) => ({
-    ...normalizeBox(item),
+  const rooms = sceneEntities(value, 'rooms', 100, (item, index) => ({
+    ...normalizeBox(item, index, 'room'),
     material: sceneMaterial(item),
   }));
-  const meshes = sceneEntities(value, 'meshes', 200, normalizeBox);
-  const lights = sceneEntities(value, 'lights', 50, (item) => ({
+  const meshes = sceneEntities(value, 'meshes', 200, (item, index) => normalizeBox(item, index, 'mesh'));
+  const lights = sceneEntities(value, 'lights', 50, (item, index) => ({
+    id: sceneObjectId(item, 'light', index),
     x: sceneNumber(item, 'x', 0, -100, 100),
     y: sceneNumber(item, 'y', 3, -100, 100),
     z: sceneNumber(item, 'z', 0, -100, 100),
@@ -558,20 +569,22 @@ function safeScene(value) {
     intensity: sceneNumber(item, 'intensity', 1, 0, 5),
     distance: sceneNumber(item, 'distance', 12, 0.1, 100),
   }));
-  const spawns = sceneEntities(value, 'spawns', 8, (item) => ({
+  const spawns = sceneEntities(value, 'spawns', 8, (item, index) => ({
+    id: sceneObjectId(item, 'spawn', index),
     x: sceneNumber(item, 'x', 0, -100, 100),
     y: sceneNumber(item, 'y', 0, -100, 100),
     z: sceneNumber(item, 'z', 0, -100, 100),
   }));
-  const doors = legacyDoorCount === undefined ? sceneEntities(value, 'doors', 50, (item) => ({
-    ...normalizeBox(item),
+  const doors = legacyDoorCount === undefined ? sceneEntities(value, 'doors', 50, (item, index) => ({
+    ...normalizeBox(item, index, 'door'),
     locked: item.locked === undefined ? false : item.locked,
   })) : [];
   if (doors.some((door) => typeof door.locked !== 'boolean')) throw new Error('Door locked must be true or false.');
-  const triggers = sceneEntities(value, 'triggers', 50, (item) => {
+  const triggers = sceneEntities(value, 'triggers', 50, (item, index) => {
     const action = item.action === undefined ? 'open-door' : item.action;
     if (typeof action !== 'string' || !sceneRules.has(action)) throw new Error('Trigger action is not approved.');
     return {
+      id: sceneObjectId(item, 'trigger', index),
       x: sceneNumber(item, 'x', 0, -100, 100),
       y: sceneNumber(item, 'y', 0, -100, 100),
       z: sceneNumber(item, 'z', 0, -100, 100),
@@ -590,6 +603,11 @@ function safeScene(value) {
       value: typeof item.value === 'string' ? item.value.trim().slice(0, 120) : '',
     };
   });
+  const blueprint = normalizeBlueprint(value.blueprint, {
+    objectIds: sceneObjectIds,
+    doorIds: new Set(legacyDoorCount === undefined ? doors.map((door) => door.id) : []),
+    nearObjectIds: new Set([...doors, ...triggers].map((item) => item.id)),
+  });
   const multiplayer = value.multiplayer === undefined ? true : value.multiplayer;
   if (typeof multiplayer !== 'boolean') throw new Error('multiplayer must be true or false.');
   const doorCount = value.doorCount ?? legacyDoorCount;
@@ -605,6 +623,7 @@ function safeScene(value) {
     doors,
     triggers,
     rules,
+    blueprint,
     multiplayer,
     maxPlayers,
     ...(doorCount === undefined ? {} : { doorCount }),

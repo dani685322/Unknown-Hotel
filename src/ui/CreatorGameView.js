@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { runBlueprintEvent } from '../core/BlueprintGraph.js';
 import WebSocketClient from '../net/WebSocketClient.js';
 
 const SESSION_KEY = 'unknown-hotel.platform-session';
@@ -188,11 +189,14 @@ export class CreatorGameView {
     });
     const spawn = scene.spawns?.[0];
     if (spawn) this.position.set(spawn.x, Math.max(1.2, spawn.y + 1.65), spawn.z);
+    const flow = this.runBlueprint('enter');
     const entryRule = scene.rules?.find((rule) => rule.event === 'enter');
-    if (entryRule) this.applyAction(entryRule.action, entryRule.value);
+    if (!flow?.steps && entryRule) this.applyAction(entryRule.action, entryRule.value);
   }
 
   interact() {
+    const flow = this.runBlueprint('interact');
+    if (flow?.steps) return;
     const point = new THREE.Vector2(this.position.x, this.position.z);
     const trigger = this.triggers.find(({ data }) => point.distanceTo(new THREE.Vector2(data.x, data.z)) < Math.max(data.width, data.depth) / 2 + 1);
     if (trigger) {
@@ -231,6 +235,35 @@ export class CreatorGameView {
       this.sceneLights.forEach((light) => { light.visible = !visible; });
       this.setGameStatus(visible ? 'Lights off.' : 'Lights on.');
     }
+  }
+
+  runBlueprint(eventName) {
+    const blueprint = this.game.scene?.blueprint;
+    if (!blueprint?.nodes?.length) return null;
+    return runBlueprintEvent(blueprint, eventName, {
+      evaluateCondition: (node) => {
+        if (node.type === 'condition-door-locked') {
+          return this.doors.find(({ data }) => data.id === node.properties.targetId)?.data.locked === true;
+        }
+        if (node.type === 'condition-player-near-object') {
+          const target = [...this.doors, ...this.triggers].find(({ data }) => data.id === node.properties.targetId)?.data;
+          if (!target) return false;
+          const radius = Math.max(Number(target.width) || 2, Number(target.depth) || 2) / 2 + 1;
+          return Math.hypot((target.x ?? 0) - this.position.x, (target.z ?? 0) - this.position.z) <= radius;
+        }
+        return false;
+      },
+      executeAction: (node) => {
+        const actions = {
+          'action-open-door': 'open-door',
+          'action-show-message': 'show-message',
+          'action-complete': 'complete',
+          'action-toggle-light': 'toggle-light',
+        };
+        const action = actions[node.type];
+        if (action) this.applyAction(action, node.properties.value ?? '');
+      },
+    });
   }
 
   setGameStatus(message) {

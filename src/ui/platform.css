@@ -137,6 +137,48 @@ body.platform-view > #vscode-modal { display: none !important; }
 .studio-toolbar button, .studio-object-list button { padding: 7px 10px; border: 1px solid var(--platform-line); border-radius: 4px; background: #28241d; color: var(--platform-text); cursor: pointer; font: inherit; font-size: 11px; }
 .studio-toolbar button:hover, .studio-object-list button.selected { border-color: var(--platform-gold); color: var(--platform-gold); }
 .studio-layout { display: grid; grid-template-columns: minmax(0, 1fr) 210px; min-height: 350px; border: 1px solid var(--platform-line); border-radius: 4px; overflow: hidden; }
+.studio-blueprint-section { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--platform-line); }
+.studio-blueprint-heading h2 { margin: 0; font: 600 20px Georgia, serif; }
+.studio-blueprint-heading p { margin: 5px 0 0; color: var(--platform-muted); font-size: 12px; }
+.studio-blueprint-section [data-blueprint-root] { min-width: 0; }
+.blueprint-workspace { display: grid; gap: 8px; }
+.blueprint-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border: 1px solid var(--platform-line); border-radius: 4px; background: #191714; color: var(--platform-muted); font-size: 11px; }
+.blueprint-toolbar button, .blueprint-node-picker [data-node-results] button { padding: 7px; border: 1px solid var(--platform-line); border-radius: 3px; background: #24211c; color: var(--platform-text); cursor: pointer; font: inherit; }
+.blueprint-canvas-wrap { position: relative; height: 440px; overflow: auto; border: 1px solid var(--platform-line); border-radius: 4px; background: #11151a; }
+.blueprint-canvas { position: relative; width: 1600px; height: 900px; overflow: hidden; background-image: radial-gradient(#35404b 1px, transparent 1px); background-size: 22px 22px; }
+.blueprint-wires { position: absolute; inset: 0; z-index: 1; width: 1600px; height: 900px; overflow: visible; pointer-events: none; }
+.blueprint-wires path { fill: none; stroke: #8ca3b8; stroke-width: 3; }
+.blueprint-wires path.branch-true { stroke: #70d7a4; }
+.blueprint-wires path.branch-false { stroke: #e58b78; }
+.blueprint-nodes { position: absolute; inset: 0; z-index: 2; }
+.blueprint-node { position: absolute; width: 230px; border: 1px solid #49515b; border-radius: 6px; background: #1d232a; color: var(--platform-text); box-shadow: 0 5px 16px rgba(0,0,0,.32); }
+.blueprint-node header { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; padding: 8px 9px; border-bottom: 1px solid #414a55; background: #28313b; cursor: grab; }
+.blueprint-node header:active { cursor: grabbing; }
+.blueprint-node header span { grid-column: 1; color: #b6c1cc; font-size: 9px; text-transform: uppercase; }
+.blueprint-node header b { grid-column: 1; font-size: 11px; }
+.blueprint-node header button { grid-column: 2; grid-row: 1 / span 2; align-self: center; border: 0; background: transparent; color: #d78e82; cursor: pointer; font-size: 17px; }
+.blueprint-node-conditions header { background: #463629; }
+.blueprint-node-flow header { background: #453b27; }
+.blueprint-node-actions header { background: #263d36; }
+.blueprint-node-body { display: grid; gap: 6px; padding: 8px; }
+.blueprint-node-property { display: grid; gap: 4px; color: var(--platform-muted); font-size: 9px; }
+.blueprint-node-property input, .blueprint-node-property select { width: 100%; min-width: 0; box-sizing: border-box; padding: 5px; border: 1px solid #454d56; border-radius: 3px; background: #11151a; color: var(--platform-text); font: inherit; }
+.blueprint-node-pins { display: flex; justify-content: space-between; gap: 12px; margin: 0 -8px -4px; }
+.blueprint-node-pins > div { display: grid; gap: 3px; }
+.blueprint-pin { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border: 0; background: transparent; color: #c5cbd1; cursor: pointer; font: inherit; font-size: 9px; }
+.blueprint-pin i { display: inline-block; width: 9px; height: 9px; border: 2px solid #aebac5; border-radius: 50%; background: #202831; }
+.blueprint-pin[data-pin-type=boolean] i { border-radius: 2px; border-color: #d5b16a; }
+.blueprint-pin.output { justify-content: flex-end; }
+.blueprint-node-picker { position: absolute; z-index: 5; width: 250px; max-height: 360px; overflow: auto; padding: 10px; border: 1px solid var(--platform-gold); border-radius: 5px; background: #191714; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+.blueprint-node-picker[hidden] { display: none; }
+.blueprint-node-picker label { display: grid; gap: 6px; color: var(--platform-muted); font-size: 10px; }
+.blueprint-node-picker input { padding: 7px; border: 1px solid var(--platform-line); border-radius: 3px; background: #100f0d; color: var(--platform-text); }
+.blueprint-node-picker [data-node-results] { display: grid; gap: 4px; margin-top: 8px; }
+.blueprint-node-picker [data-node-results] button { display: grid; gap: 3px; text-align: left; }
+.blueprint-node-picker [data-node-results] button:hover, .blueprint-toolbar button:hover { border-color: var(--platform-gold); }
+.blueprint-node-picker [data-node-results] span { color: var(--platform-muted); font-size: 9px; text-transform: uppercase; }
+.blueprint-node-picker [data-node-results] b { font-size: 11px; }
+.blueprint-node-picker [data-node-results] p, .blueprint-status { margin: 0; color: var(--platform-muted); font-size: 10px; }
 .studio-viewport { position: relative; min-width: 0; min-height: 350px; background: #10151b; }
 .studio-viewport canvas { display: block; width: 100%; height: 350px; touch-action: none; }
 .studio-viewport > span { position: absolute; bottom: 8px; left: 10px; color: var(--platform-muted); font-size: 10px; pointer-events: none; }

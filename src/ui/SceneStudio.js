@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BlueprintEditor } from './BlueprintEditor.js';
 
 const MATERIAL_COLORS = {
   wood: '#73543a',
@@ -19,6 +20,16 @@ const EDITOR_LIMITS = {
   rules: 100,
 };
 
+const ENTITY_PREFIX = {
+  rooms: 'room',
+  meshes: 'mesh',
+  lights: 'light',
+  spawns: 'spawn',
+  doors: 'door',
+  triggers: 'trigger',
+  rules: 'rule',
+};
+
 const DEFAULT_SCENE = {
   template: 'corridor',
   rooms: [{ x: 0, y: 0, z: 0, width: 14, height: 4, depth: 20, material: 'wood' }],
@@ -28,6 +39,7 @@ const DEFAULT_SCENE = {
   doors: [],
   triggers: [],
   rules: [],
+  blueprint: { version: 1, nodes: [], edges: [] },
   multiplayer: true,
   maxPlayers: 4,
 };
@@ -48,18 +60,30 @@ export class SceneStudio {
     this.renderScene();
     this.renderObjectList();
     this.renderInspector();
+    this.blueprintEditor = new BlueprintEditor(
+      this.root.querySelector('[data-blueprint-root]'),
+      this.sceneData,
+      (blueprint) => {
+        this.sceneData.blueprint = blueprint;
+        this.changed();
+      },
+      this.onError,
+    );
     this.animate();
   }
 
   normalizeScene(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return structuredClone(DEFAULT_SCENE);
     const scene = structuredClone(DEFAULT_SCENE);
-    for (const key of ['template', 'rooms', 'meshes', 'lights', 'spawns', 'doors', 'triggers', 'rules', 'multiplayer', 'maxPlayers']) {
+    for (const key of ['template', 'rooms', 'meshes', 'lights', 'spawns', 'doors', 'triggers', 'rules', 'blueprint', 'multiplayer', 'maxPlayers']) {
       if (value[key] !== undefined) scene[key] = value[key];
     }
     for (const [type, limit] of Object.entries(EDITOR_LIMITS)) {
       if (!Array.isArray(scene[type])) scene[type] = [];
-      else scene[type] = scene[type].filter((item) => item && typeof item === 'object' && !Array.isArray(item)).slice(0, limit);
+      else scene[type] = scene[type]
+        .filter((item) => item && typeof item === 'object' && !Array.isArray(item))
+        .slice(0, limit)
+        .map((item, index) => ({ ...item, id: item.id ?? `${ENTITY_PREFIX[type]}-${index + 1}` }));
     }
     return scene;
   }
@@ -83,6 +107,10 @@ export class SceneStudio {
           <div class="studio-properties"></div>
         </aside>
       </div>
+      <section class="studio-blueprint-section" aria-label="Blueprint event graph">
+        <div class="studio-blueprint-heading"><div><h2>Blueprint Event Graph</h2><p>Right-click the graph to search for events and actions. Connect the nodes to add gameplay logic.</p></div></div>
+        <div data-blueprint-root></div>
+      </section>
     </section>`;
     this.canvas = this.root.querySelector('canvas');
     this.objectList = this.root.querySelector('.studio-object-list');
@@ -240,6 +268,7 @@ export class SceneStudio {
       rules: { event: 'interact', action: 'open-door', value: '' },
     };
     const item = structuredClone(defaults[type]);
+    item.id = `${ENTITY_PREFIX[type] ?? type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     items.push(item);
     this.selection = { type, index: items.length - 1 };
     this.changed();
@@ -352,6 +381,7 @@ export class SceneStudio {
     this.renderScene();
     this.renderObjectList();
     this.renderInspector();
+    this.blueprintEditor?.setScene(this.sceneData);
     this.onChange(structuredClone(this.sceneData));
   }
 
@@ -366,6 +396,7 @@ export class SceneStudio {
   }
 
   dispose() {
+    this.blueprintEditor?.dispose();
     this.running = false;
     cancelAnimationFrame(this.animationFrame);
     window.removeEventListener('resize', this.resizeHandler);

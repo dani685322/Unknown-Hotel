@@ -158,6 +158,46 @@ test('auth, ownership, approval, visits, friends, scene safety, chat, and modera
     body: { title: 'Invalid material', slug: 'invalid-material', scene: { template: 'corridor', meshes: [{ material: 'external-url' }] } },
   });
   assert.equal(invalidMaterial.status, 400);
+  const invalidBlueprint = await api('/api/games', {
+    token: alice,
+    method: 'POST',
+    body: {
+      title: 'Invalid blueprint',
+      slug: 'invalid-blueprint',
+      scene: { template: 'corridor', blueprint: { version: 1, nodes: [{ id: 'bad', type: 'run-script' }], edges: [] } },
+    },
+  });
+  assert.equal(invalidBlueprint.status, 400);
+  const validBlueprint = await api('/api/games', {
+    token: alice,
+    method: 'POST',
+    body: {
+      title: 'Event Graph',
+      slug: 'event-graph',
+      scene: {
+        template: 'corridor',
+        doors: [{ id: 'door-main', locked: true }],
+        blueprint: {
+          version: 1,
+          nodes: [
+            { id: 'start', type: 'event-interact' },
+            { id: 'locked', type: 'condition-door-locked', properties: { targetId: 'door-main' } },
+            { id: 'branch', type: 'branch' },
+            { id: 'message', type: 'action-show-message', properties: { value: 'Locked!' } },
+          ],
+          edges: [
+            { from: { nodeId: 'start', pin: 'exec' }, to: { nodeId: 'branch', pin: 'exec' } },
+            { from: { nodeId: 'locked', pin: 'value' }, to: { nodeId: 'branch', pin: 'condition' } },
+            { from: { nodeId: 'branch', pin: 'true' }, to: { nodeId: 'message', pin: 'exec' } },
+          ],
+        },
+      },
+    },
+  });
+  assert.equal(validBlueprint.status, 201);
+  const savedBlueprint = await api('/api/me/games/event-graph', { token: alice });
+  assert.equal(savedBlueprint.data.game.scene.blueprint.nodes.length, 4);
+  assert.equal(savedBlueprint.data.game.scene.doors[0].id, 'door-main');
 
   const created = await api('/api/games', {
     token: alice,
