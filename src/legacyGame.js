@@ -2,6 +2,7 @@ import { THREE, Peer, EffectComposer, RenderPass, UnrealBloomPass } from './lega
 import { Admin } from './Admin.js';
 import { MultiplayerMenu } from './ui/MultiplayerMenu.js';
 import { clearRunData, loadSavedRun, saveRunData } from './data/savedata.js';
+import { whenDomReady } from './core/whenDomReady.js';
 import './ui/mainmenu.css';
 import './ui/admin-terminal.css';
 
@@ -3008,7 +3009,7 @@ import './ui/admin-terminal.css';
 
         window.DoorsHotelGame = DoorsHotelGame;
 
-        window.onload = function () {
+        const initializeHotel = () => {
             const openModal = (id) => document.getElementById(id)?.classList.remove('hidden');
             const closeModal = (id) => document.getElementById(id)?.classList.add('hidden');
 
@@ -3079,3 +3080,4 @@ import './ui/admin-terminal.css';
                 }
             }
         };
+        whenDomReady(document, initializeHotel);
