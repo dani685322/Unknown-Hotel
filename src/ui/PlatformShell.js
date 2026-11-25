@@ -611,15 +611,16 @@ export class PlatformShell {
     const gameUrl = new URL(location.href);
     gameUrl.searchParams.set('play', '1');
     gameUrl.searchParams.set('game', slug);
-    const popup = window.open('about:blank', '_blank');
-    if (!popup) { this.setStatus('Your browser blocked the new tab. Allow popups or use the game link again.', 'error'); return; }
-    const safeSrc = gameUrl.href.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    popup.document.title = 'Unknown Halls';
-    popup.document.body.style.cssText = 'margin:0;overflow:hidden;background:#000';
-    popup.document.body.innerHTML = `<iframe title="Unknown Halls" src="${safeSrc}" allow="fullscreen; gamepad; microphone" style="width:100vw;height:100vh;border:0;display:block"></iframe>`;
+    if (this.launchingGame) return;
+    this.launchingGame = true;
     if (this.session?.token) {
-      try { await this.request(`/api/games/${encodeURIComponent(slug)}/visit`, { method: 'POST' }); await this.refresh(); } catch { /* guest play remains available */ }
+      try {
+        await this.request(`/api/games/${encodeURIComponent(slug)}/visit`, { method: 'POST' });
+      } catch (error) {
+        this.setStatus(`Starting game; visit could not be recorded: ${error.message}`, 'error');
+      }
     }
+    location.assign(gameUrl.href);
   }
 }
 
